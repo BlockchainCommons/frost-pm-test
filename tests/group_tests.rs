@@ -1,7 +1,8 @@
 use frost_pm_test::{Group, GroupConfig};
 
 // Test helper functions
-pub fn corporate_board_config() -> Result<GroupConfig, Box<dyn std::error::Error>> {
+pub fn corporate_board_config()
+-> Result<GroupConfig, Box<dyn std::error::Error>> {
     GroupConfig::new(3, &["CEO", "CFO", "CTO", "COO", "CLO"])
 }
 
@@ -128,4 +129,69 @@ fn test_group_participant_management() {
     // Test participant names string
     let names_string = group.participant_names_string();
     assert_eq!(names_string, "Alice, Bob, Eve");
+}
+
+#[test]
+fn test_group_new_from_key_material() {
+    let config = GroupConfig::default();
+    let mut rng = rand::thread_rng();
+
+    // First create a group with trusted dealer to get valid key material
+    let trusted_group =
+        Group::new_with_trusted_dealer(config, &mut rng).unwrap();
+
+    // Extract the key material
+    let key_packages = trusted_group.key_packages().clone();
+    let public_key_package = trusted_group.public_key_package().clone();
+
+    // Now create a new group using the extracted key material
+    let config2 = GroupConfig::default();
+    let material_group =
+        Group::new_from_key_material(config2, key_packages, public_key_package)
+            .unwrap();
+
+    // Verify the groups have the same properties
+    assert_eq!(material_group.min_signers(), trusted_group.min_signers());
+    assert_eq!(material_group.max_signers(), trusted_group.max_signers());
+    assert_eq!(
+        material_group.participant_names_string(),
+        trusted_group.participant_names_string()
+    );
+
+    // Verify both groups can sign and produce valid signatures
+    let message = b"Test message for both groups";
+    let signers = trusted_group.select_signers(None);
+
+    let sig1 = trusted_group.sign(message, &signers, &mut rng).unwrap();
+    let sig2 = material_group.sign(message, &signers, &mut rng).unwrap();
+
+    // Both groups should be able to verify each other's signatures
+    assert!(trusted_group.verify(message, &sig1).is_ok());
+    assert!(trusted_group.verify(message, &sig2).is_ok());
+    assert!(material_group.verify(message, &sig1).is_ok());
+    assert!(material_group.verify(message, &sig2).is_ok());
+}
+
+#[test]
+fn test_group_new_from_key_material_validation() {
+    let config = GroupConfig::default();
+    let mut rng = rand::thread_rng();
+
+    // Create a group to get valid key material
+    let group = Group::new_with_trusted_dealer(config, &mut rng).unwrap();
+    let mut key_packages = group.key_packages().clone();
+    let public_key_package = group.public_key_package().clone();
+
+    // Test with missing key package
+    let participant_id = key_packages.keys().next().unwrap().clone();
+    key_packages.remove(&participant_id);
+
+    let config2 = GroupConfig::default();
+    let result =
+        Group::new_from_key_material(config2, key_packages, public_key_package);
+    assert!(result.is_err());
+    if let Err(error) = result {
+        let error_msg = error.to_string();
+        assert!(error_msg.contains("Expected 3 key packages, got 2"));
+    }
 }

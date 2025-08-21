@@ -1,12 +1,12 @@
-use std::collections::BTreeMap;
+use frost_ed25519 as frost;
 use frost_ed25519::{
     Identifier, Signature, SigningPackage,
     keys::{KeyPackage, PublicKeyPackage},
     round1::{SigningCommitments, SigningNonces},
     round2::SignatureShare,
 };
-use frost_ed25519 as frost;
 use rand::{CryptoRng, RngCore};
+use std::collections::BTreeMap;
 
 use crate::group_config::GroupConfig;
 
@@ -29,30 +29,29 @@ pub struct Group {
 
 impl Group {
     /// Create a new Group using trusted dealer key generation
-    pub fn new_with_trusted_dealer(config: GroupConfig, rng: &mut (impl RngCore + CryptoRng)) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn new_with_trusted_dealer(
+        config: GroupConfig,
+        rng: &mut (impl RngCore + CryptoRng),
+    ) -> Result<Self, Box<dyn std::error::Error>> {
         // Generate secret shares using trusted dealer
-        let (secret_shares, public_key_package) = frost::keys::generate_with_dealer(
-            config.max_signers,
-            config.min_signers,
-            frost::keys::IdentifierList::Custom(&config.participant_ids()),
-            rng,
-        )?;
+        let (secret_shares, public_key_package) =
+            frost::keys::generate_with_dealer(
+                config.max_signers(),
+                config.min_signers(),
+                frost::keys::IdentifierList::Custom(&config.participant_ids()),
+                rng,
+            )?;
 
         // Convert secret shares to key packages
-        let mut key_packages: BTreeMap<Identifier, KeyPackage> = BTreeMap::new();
+        let mut key_packages: BTreeMap<Identifier, KeyPackage> =
+            BTreeMap::new();
         for (identifier, secret_share) in &secret_shares {
             let key_package = KeyPackage::try_from(secret_share.clone())?;
             key_packages.insert(*identifier, key_package);
         }
 
-        Ok(Self {
-            min_signers: config.min_signers,
-            max_signers: config.max_signers,
-            participants: config.participants,
-            id_to_name: config.id_to_name,
-            key_packages,
-            public_key_package,
-        })
+        // Use the more primitive constructor
+        Self::new_from_key_material(config, key_packages, public_key_package)
     }
 
     /// Create a new Group from existing key material (e.g., from DKG)
@@ -67,7 +66,8 @@ impl Group {
                 "Expected {} key packages, got {}",
                 config.max_signers,
                 key_packages.len()
-            ).into());
+            )
+            .into());
         }
 
         // Validate that all participant identifiers have corresponding key packages
@@ -76,7 +76,8 @@ impl Group {
                 return Err(format!(
                     "Missing key package for participant {}",
                     config.participant_name(participant_id)
-                ).into());
+                )
+                .into());
             }
         }
 
@@ -150,24 +151,38 @@ impl Group {
     }
 
     /// Perform a complete signing ceremony with the specified signers and message
-    pub fn sign(&self, message: &[u8], signers: &[Identifier], rng: &mut (impl RngCore + CryptoRng)) -> Result<Signature, Box<dyn std::error::Error>> {
+    pub fn sign(
+        &self,
+        message: &[u8],
+        signers: &[Identifier],
+        rng: &mut (impl RngCore + CryptoRng),
+    ) -> Result<Signature, Box<dyn std::error::Error>> {
         if signers.len() < self.min_signers as usize {
             return Err(format!(
                 "Need at least {} signers, got {}",
                 self.min_signers,
                 signers.len()
-            ).into());
+            )
+            .into());
         }
 
         // Round 1: Generate nonces and commitments
-        let mut nonces_map: BTreeMap<Identifier, SigningNonces> = BTreeMap::new();
-        let mut commitments_map: BTreeMap<Identifier, SigningCommitments> = BTreeMap::new();
+        let mut nonces_map: BTreeMap<Identifier, SigningNonces> =
+            BTreeMap::new();
+        let mut commitments_map: BTreeMap<Identifier, SigningCommitments> =
+            BTreeMap::new();
 
         for signer_id in signers {
-            let key_package = self.key_packages.get(signer_id)
-                .ok_or_else(|| format!("No key package for signer {}", self.participant_name(signer_id)))?;
+            let key_package =
+                self.key_packages.get(signer_id).ok_or_else(|| {
+                    format!(
+                        "No key package for signer {}",
+                        self.participant_name(signer_id)
+                    )
+                })?;
 
-            let (nonces, commitments) = frost::round1::commit(key_package.signing_share(), rng);
+            let (nonces, commitments) =
+                frost::round1::commit(key_package.signing_share(), rng);
             nonces_map.insert(*signer_id, nonces);
             commitments_map.insert(*signer_id, commitments);
         }
@@ -176,23 +191,33 @@ impl Group {
         let signing_package = SigningPackage::new(commitments_map, message);
 
         // Round 2: Generate signature shares
-        let mut signature_shares: BTreeMap<Identifier, SignatureShare> = BTreeMap::new();
+        let mut signature_shares: BTreeMap<Identifier, SignatureShare> =
+            BTreeMap::new();
         for signer_id in signers {
             let nonces = &nonces_map[signer_id];
             let key_package = &self.key_packages[signer_id];
 
-            let signature_share = frost::round2::sign(&signing_package, nonces, key_package)?;
+            let signature_share =
+                frost::round2::sign(&signing_package, nonces, key_package)?;
             signature_shares.insert(*signer_id, signature_share);
         }
 
         // Aggregate signature
-        let group_signature = frost::aggregate(&signing_package, &signature_shares, &self.public_key_package)?;
+        let group_signature = frost::aggregate(
+            &signing_package,
+            &signature_shares,
+            &self.public_key_package,
+        )?;
 
         Ok(group_signature)
     }
 
     /// Verify a signature against a message using the group's public key
-    pub fn verify(&self, message: &[u8], signature: &Signature) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn verify(
+        &self,
+        message: &[u8],
+        signature: &Signature,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         self.verifying_key()
             .verify(message, signature)
             .map_err(|e| e.into())

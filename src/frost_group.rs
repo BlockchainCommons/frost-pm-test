@@ -8,11 +8,11 @@ use frost_ed25519::{
 use rand::{CryptoRng, RngCore};
 use std::collections::BTreeMap;
 
-use crate::group_config::GroupConfig;
+use crate::frost_group_config::FROSTGroupConfig;
 
 /// A fully constituted FROST group with all key material needed for signing
 /// This type abstracts away whether keys were generated via trusted dealer or DKG
-pub struct Group {
+pub struct FROSTGroup {
     /// Minimum number of signers required (threshold)
     min_signers: u16,
     /// Maximum number of participants
@@ -25,10 +25,10 @@ pub struct Group {
     public_key_package: PublicKeyPackage,
 }
 
-impl Group {
-    /// Create a new Group using trusted dealer key generation
+impl FROSTGroup {
+    /// Create a new FROSTGroup using trusted dealer key generation
     pub fn new_with_trusted_dealer(
-        config: GroupConfig,
+        config: FROSTGroupConfig,
         rng: &mut (impl RngCore + CryptoRng),
     ) -> Result<Self, Box<dyn std::error::Error>> {
         // Generate secret shares using trusted dealer
@@ -52,9 +52,9 @@ impl Group {
         Self::new_from_key_material(config, key_packages, public_key_package)
     }
 
-    /// Create a new Group from existing key material (e.g., from DKG)
+    /// Create a new FROSTGroup from existing key material (e.g., from DKG)
     pub fn new_from_key_material(
-        config: GroupConfig,
+        config: FROSTGroupConfig,
         key_packages: BTreeMap<Identifier, KeyPackage>,
         public_key_package: PublicKeyPackage,
     ) -> Result<Self, Box<dyn std::error::Error>> {
@@ -204,7 +204,7 @@ impl Group {
     }
 }
 
-impl Group {
+impl FROSTGroup {
     /// Convert participant name to identifier (private helper)
     fn name_to_id(
         &self,

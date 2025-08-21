@@ -33,11 +33,11 @@ The demo follows the FROST specification RFC draft and demonstrates the complete
 without network communication (all done in-memory for simplicity).
 */
 
-pub mod group;
-pub mod group_config;
+pub mod frost_group;
+pub mod frost_group_config;
 
-use group::Group;
-use group_config::GroupConfig;
+use frost_group::FROSTGroup;
+use frost_group_config::FROSTGroupConfig;
 use rand::thread_rng;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -49,7 +49,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     println!();
 
-    let group_config = GroupConfig::default();
+    let group_config = FROSTGroupConfig::default();
     let message = b"Hello, FROST! This is a 2-of-3 threshold signature demo.";
     let mut rng = thread_rng();
 
@@ -64,10 +64,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "   • Message: {:?}",
         std::str::from_utf8(message).unwrap_or("<binary>")
     );
-    println!(
-        "   • Message length: {} bytes",
-        message.len()
-    );
+    println!("   • Message length: {} bytes", message.len());
     println!(
         "   • Participants: {}",
         group_config.participant_names_string()
@@ -82,7 +79,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🏗️  STEP 1: Group Formation");
     println!("   Creating FROST group using trusted dealer key generation...");
 
-    let group = Group::new_with_trusted_dealer(group_config, &mut rng)?;
+    let group = FROSTGroup::new_with_trusted_dealer(group_config, &mut rng)?;
 
     println!("   ✅ Group formed successfully");
     println!(
@@ -143,8 +140,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     // Perform the complete signing ceremony
-    let group_signature =
-        group.sign(message, &signers, &mut rng)?;
+    let group_signature = group.sign(message, &signers, &mut rng)?;
 
     println!("   ✅ Group signature generated successfully");
     let signature_bytes = group_signature.serialize()?;
@@ -218,10 +214,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         group.min_signers(),
         group.max_signers()
     );
-    println!(
-        "   • Message length: {} bytes",
-        message.len()
-    );
+    println!("   • Message length: {} bytes", message.len());
     println!("   • Signature length: {} bytes", signature_bytes.len());
     println!(
         "   • Group public key length: {} bytes",

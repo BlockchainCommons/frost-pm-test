@@ -61,17 +61,17 @@ impl Group {
         public_key_package: PublicKeyPackage,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         // Validate that we have key packages for all participants
-        if key_packages.len() != config.max_signers as usize {
+        if key_packages.len() != config.max_signers() as usize {
             return Err(format!(
                 "Expected {} key packages, got {}",
-                config.max_signers,
+                config.max_signers(),
                 key_packages.len()
             )
             .into());
         }
 
         // Validate that all participant identifiers have corresponding key packages
-        for participant_id in config.participants.values() {
+        for participant_id in config.participants().values() {
             if !key_packages.contains_key(participant_id) {
                 return Err(format!(
                     "Missing key package for participant {}",
@@ -82,10 +82,10 @@ impl Group {
         }
 
         Ok(Self {
-            min_signers: config.min_signers,
-            max_signers: config.max_signers,
-            participants: config.participants,
-            id_to_name: config.id_to_name,
+            min_signers: config.min_signers(),
+            max_signers: config.max_signers(),
+            participants: config.participants().clone(),
+            id_to_name: config.id_to_name().clone(),
             key_packages,
             public_key_package,
         })

@@ -4,13 +4,13 @@ use std::collections::BTreeMap;
 /// Configuration for the FROST group parameters
 pub struct GroupConfig {
     /// Minimum number of signers required (threshold)
-    pub(crate) min_signers: u16,
+    min_signers: u16,
     /// Maximum number of participants
-    pub(crate) max_signers: u16,
+    max_signers: u16,
     /// Mapping of human-readable names to FROST identifiers
-    pub(crate) participants: BTreeMap<&'static str, Identifier>,
+    participants: BTreeMap<&'static str, Identifier>,
     /// Reverse mapping from FROST identifiers to human-readable names
-    pub(crate) id_to_name: BTreeMap<Identifier, &'static str>,
+    id_to_name: BTreeMap<Identifier, &'static str>,
 }
 
 impl GroupConfig {
@@ -73,6 +73,16 @@ impl GroupConfig {
             .cloned()
             .collect::<Vec<_>>()
             .join(", ")
+    }
+
+    /// Get a reference to the participants mapping (for internal use)
+    pub(crate) fn participants(&self) -> &BTreeMap<&'static str, Identifier> {
+        &self.participants
+    }
+
+    /// Get a reference to the id_to_name mapping (for internal use)
+    pub(crate) fn id_to_name(&self) -> &BTreeMap<Identifier, &'static str> {
+        &self.id_to_name
     }
 }
 

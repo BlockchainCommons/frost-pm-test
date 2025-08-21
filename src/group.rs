@@ -19,8 +19,6 @@ pub struct Group {
     max_signers: u16,
     /// Mapping of human-readable names to FROST identifiers
     participants: BTreeMap<&'static str, Identifier>,
-    /// Reverse mapping from FROST identifiers to human-readable names
-    id_to_name: BTreeMap<Identifier, &'static str>,
     /// Key packages for each participant (contains signing shares)
     key_packages: BTreeMap<Identifier, KeyPackage>,
     /// The group's public key package (for verification and coordination)
@@ -28,84 +26,6 @@ pub struct Group {
 }
 
 impl Group {
-    /// Convert participant name to identifier (private helper)
-    fn name_to_id(
-        &self,
-        name: &str,
-    ) -> Result<Identifier, Box<dyn std::error::Error>> {
-        self.participants
-            .get(name)
-            .cloned()
-            .ok_or_else(|| format!("Unknown participant: {}", name).into())
-    }
-
-    /// Get participant name by identifier (private helper)
-    fn id_to_name(&self, id: &Identifier) -> &'static str {
-        self.id_to_name.get(id).unwrap_or(&"Unknown")
-    }
-
-    /// Helper method to perform round1 commit for a participant by name
-    fn commit_for_participant(
-        &self,
-        participant_name: &str,
-        rng: &mut (impl RngCore + CryptoRng),
-    ) -> Result<(SigningNonces, SigningCommitments), Box<dyn std::error::Error>>
-    {
-        let key_package = self.key_package(participant_name)?;
-        Ok(frost::round1::commit(key_package.signing_share(), rng))
-    }
-
-    /// Helper method to perform round2 signing for a participant by name
-    fn sign_for_participant(
-        &self,
-        participant_name: &str,
-        signing_package: &SigningPackage,
-        nonces: &SigningNonces,
-    ) -> Result<SignatureShare, Box<dyn std::error::Error>> {
-        let key_package = self.key_package(participant_name)?;
-        Ok(frost::round2::sign(signing_package, nonces, key_package)?)
-    }
-
-    /// Helper method to create a signing package from signer names and their commitments
-    fn create_signing_package(
-        &self,
-        signer_names: &[&str],
-        commitments_by_name: &BTreeMap<String, SigningCommitments>,
-        message: &[u8],
-    ) -> Result<SigningPackage, Box<dyn std::error::Error>> {
-        let mut frost_commitments_map: BTreeMap<
-            Identifier,
-            SigningCommitments,
-        > = BTreeMap::new();
-        for &signer_name in signer_names {
-            let signer_id = self.name_to_id(signer_name)?;
-            let commitments = &commitments_by_name[signer_name];
-            frost_commitments_map.insert(signer_id, commitments.clone());
-        }
-        Ok(SigningPackage::new(frost_commitments_map, message))
-    }
-
-    /// Helper method to aggregate signature shares and create the final signature
-    fn aggregate_signature(
-        &self,
-        signing_package: &SigningPackage,
-        signer_names: &[&str],
-        signature_shares_by_name: &BTreeMap<String, SignatureShare>,
-    ) -> Result<Signature, Box<dyn std::error::Error>> {
-        let mut frost_signature_shares: BTreeMap<Identifier, SignatureShare> =
-            BTreeMap::new();
-        for &signer_name in signer_names {
-            let signer_id = self.name_to_id(signer_name)?;
-            let signature_share = &signature_shares_by_name[signer_name];
-            frost_signature_shares.insert(signer_id, signature_share.clone());
-        }
-        Ok(frost::aggregate(
-            signing_package,
-            &frost_signature_shares,
-            &self.public_key_package,
-        )?)
-    }
-
     /// Create a new Group using trusted dealer key generation
     pub fn new_with_trusted_dealer(
         config: GroupConfig,
@@ -163,7 +83,6 @@ impl Group {
             min_signers: config.min_signers(),
             max_signers: config.max_signers(),
             participants: config.participants().clone(),
-            id_to_name: config.id_to_name().clone(),
             key_packages,
             public_key_package,
         })
@@ -217,17 +136,6 @@ impl Group {
     /// Get the group's verifying key (public key)
     pub fn verifying_key(&self) -> &frost::VerifyingKey {
         self.public_key_package.verifying_key()
-    }
-
-    /// Select a subset of participants for signing (up to min_signers)
-    /// Returns participant names instead of identifiers
-    pub fn select_signers(&self, count: Option<usize>) -> Vec<&'static str> {
-        let signer_count = count.unwrap_or(self.min_signers as usize);
-        self.key_packages
-            .keys()
-            .take(signer_count.min(self.max_signers as usize))
-            .map(|id| self.id_to_name(id))
-            .collect()
     }
 
     /// Perform a complete signing ceremony with the specified signers and message
@@ -302,5 +210,80 @@ impl Group {
         self.verifying_key()
             .verify(message, signature)
             .map_err(|e| e.into())
+    }
+}
+
+impl Group {
+    /// Convert participant name to identifier (private helper)
+    fn name_to_id(
+        &self,
+        name: &str,
+    ) -> Result<Identifier, Box<dyn std::error::Error>> {
+        self.participants
+            .get(name)
+            .cloned()
+            .ok_or_else(|| format!("Unknown participant: {}", name).into())
+    }
+
+    /// Helper method to perform round1 commit for a participant by name
+    fn commit_for_participant(
+        &self,
+        participant_name: &str,
+        rng: &mut (impl RngCore + CryptoRng),
+    ) -> Result<(SigningNonces, SigningCommitments), Box<dyn std::error::Error>>
+    {
+        let key_package = self.key_package(participant_name)?;
+        Ok(frost::round1::commit(key_package.signing_share(), rng))
+    }
+
+    /// Helper method to perform round2 signing for a participant by name
+    fn sign_for_participant(
+        &self,
+        participant_name: &str,
+        signing_package: &SigningPackage,
+        nonces: &SigningNonces,
+    ) -> Result<SignatureShare, Box<dyn std::error::Error>> {
+        let key_package = self.key_package(participant_name)?;
+        Ok(frost::round2::sign(signing_package, nonces, key_package)?)
+    }
+
+    /// Helper method to create a signing package from signer names and their commitments
+    fn create_signing_package(
+        &self,
+        signer_names: &[&str],
+        commitments_by_name: &BTreeMap<String, SigningCommitments>,
+        message: &[u8],
+    ) -> Result<SigningPackage, Box<dyn std::error::Error>> {
+        let mut frost_commitments_map: BTreeMap<
+            Identifier,
+            SigningCommitments,
+        > = BTreeMap::new();
+        for &signer_name in signer_names {
+            let signer_id = self.name_to_id(signer_name)?;
+            let commitments = &commitments_by_name[signer_name];
+            frost_commitments_map.insert(signer_id, commitments.clone());
+        }
+        Ok(SigningPackage::new(frost_commitments_map, message))
+    }
+
+    /// Helper method to aggregate signature shares and create the final signature
+    fn aggregate_signature(
+        &self,
+        signing_package: &SigningPackage,
+        signer_names: &[&str],
+        signature_shares_by_name: &BTreeMap<String, SignatureShare>,
+    ) -> Result<Signature, Box<dyn std::error::Error>> {
+        let mut frost_signature_shares: BTreeMap<Identifier, SignatureShare> =
+            BTreeMap::new();
+        for &signer_name in signer_names {
+            let signer_id = self.name_to_id(signer_name)?;
+            let signature_share = &signature_shares_by_name[signer_name];
+            frost_signature_shares.insert(signer_id, signature_share.clone());
+        }
+        Ok(frost::aggregate(
+            signing_package,
+            &frost_signature_shares,
+            &self.public_key_package,
+        )?)
     }
 }

@@ -139,7 +139,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     // Select signers (in this case, the first min_signers participants)
-    let signers = group.select_signers(None);
+    let participant_names = group.participant_names();
+    let signers: Vec<&str> = participant_names
+        .iter()
+        .take(group.min_signers() as usize)
+        .copied()
+        .collect();
 
     for (i, participant_name) in signers.iter().enumerate() {
         println!("   👤 Signer {}: {}", i + 1, participant_name);

@@ -79,11 +79,6 @@ impl GroupConfig {
     pub(crate) fn participants(&self) -> &BTreeMap<&'static str, Identifier> {
         &self.participants
     }
-
-    /// Get a reference to the id_to_name mapping (for internal use)
-    pub(crate) fn id_to_name(&self) -> &BTreeMap<Identifier, &'static str> {
-        &self.id_to_name
-    }
 }
 
 impl Default for GroupConfig {

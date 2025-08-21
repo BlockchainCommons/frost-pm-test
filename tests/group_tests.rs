@@ -37,7 +37,12 @@ fn test_group_signing() {
     let message = b"Test message for FROST signing";
 
     // Select signers
-    let signers = group.select_signers(None);
+    let participant_names = group.participant_names();
+    let signers: Vec<&str> = participant_names
+        .iter()
+        .take(group.min_signers() as usize)
+        .copied()
+        .collect();
     assert_eq!(signers.len(), 2); // min_signers
 
     // Perform signing
@@ -79,31 +84,18 @@ fn test_corporate_board_signing() {
     assert_eq!(group.max_signers(), 5);
 
     let message = b"Corporate board resolution";
-    let signers = group.select_signers(None); // Should select 3 signers
+
+    // Select first 3 participants as signers (threshold)
+    let participant_names = group.participant_names();
+    let signers: Vec<&str> = participant_names
+        .iter()
+        .take(group.min_signers() as usize)
+        .copied()
+        .collect();
     assert_eq!(signers.len(), 3);
 
     let signature = group.sign(message, &signers, &mut rng).unwrap();
     assert!(group.verify(message, &signature).is_ok());
-}
-
-#[test]
-fn test_group_signer_selection() {
-    let config = GroupConfig::default();
-    let mut rng = rand::thread_rng();
-
-    let group = Group::new_with_trusted_dealer(config, &mut rng).unwrap();
-
-    // Test default selection (should use min_signers)
-    let default_signers = group.select_signers(None);
-    assert_eq!(default_signers.len(), group.min_signers() as usize);
-
-    // Test custom selection
-    let custom_signers = group.select_signers(Some(3));
-    assert_eq!(custom_signers.len(), 3);
-
-    // Test selection that exceeds max_signers (should be capped)
-    let capped_signers = group.select_signers(Some(10));
-    assert_eq!(capped_signers.len(), group.max_signers() as usize);
 }
 
 #[test]
@@ -143,7 +135,14 @@ fn test_group_basic_functionality() {
 
     // Verify signing works
     let message = b"Test message";
-    let signers = group.select_signers(None);
+
+    // Select first 2 participants as signers
+    let participant_names = group.participant_names();
+    let signers: Vec<&str> = participant_names
+        .iter()
+        .take(group.min_signers() as usize)
+        .copied()
+        .collect();
 
     let signature = group.sign(message, &signers, &mut rng).unwrap();
     assert!(group.verify(message, &signature).is_ok());

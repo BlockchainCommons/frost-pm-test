@@ -102,6 +102,25 @@ impl Group {
         Ok(frost_signature_shares)
     }
 
+    /// Helper method to aggregate signature shares and create the final signature
+    fn aggregate_signature(
+        &self,
+        signing_package: &SigningPackage,
+        signer_names: &[&str],
+        signature_shares_by_name: &BTreeMap<String, SignatureShare>,
+    ) -> Result<Signature, Box<dyn std::error::Error>> {
+        let frost_signature_shares = self
+            .convert_signature_shares_for_aggregation(
+                signer_names,
+                signature_shares_by_name,
+            )?;
+        Ok(frost::aggregate(
+            signing_package,
+            &frost_signature_shares,
+            &self.public_key_package,
+        )?)
+    }
+
     /// Create a new Group using trusted dealer key generation
     pub fn new_with_trusted_dealer(
         config: GroupConfig,
@@ -279,17 +298,11 @@ impl Group {
             signature_shares.insert(signer_name.to_string(), signature_share);
         }
 
-        let frost_signature_shares = self
-            .convert_signature_shares_for_aggregation(
-                signer_names,
-                &signature_shares,
-            )?;
-
         // Aggregate signature
-        let group_signature = frost::aggregate(
+        let group_signature = self.aggregate_signature(
             &signing_package,
-            &frost_signature_shares,
-            &self.public_key_package,
+            signer_names,
+            &signature_shares,
         )?;
 
         Ok(group_signature)

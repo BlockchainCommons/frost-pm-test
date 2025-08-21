@@ -85,23 +85,6 @@ impl Group {
         Ok(SigningPackage::new(frost_commitments_map, message))
     }
 
-    /// Helper method to convert signature shares from name-based to identifier-based for aggregation
-    fn convert_signature_shares_for_aggregation(
-        &self,
-        signer_names: &[&str],
-        signature_shares_by_name: &BTreeMap<String, SignatureShare>,
-    ) -> Result<BTreeMap<Identifier, SignatureShare>, Box<dyn std::error::Error>>
-    {
-        let mut frost_signature_shares: BTreeMap<Identifier, SignatureShare> =
-            BTreeMap::new();
-        for &signer_name in signer_names {
-            let signer_id = self.name_to_id(signer_name)?;
-            let signature_share = &signature_shares_by_name[signer_name];
-            frost_signature_shares.insert(signer_id, signature_share.clone());
-        }
-        Ok(frost_signature_shares)
-    }
-
     /// Helper method to aggregate signature shares and create the final signature
     fn aggregate_signature(
         &self,
@@ -109,11 +92,13 @@ impl Group {
         signer_names: &[&str],
         signature_shares_by_name: &BTreeMap<String, SignatureShare>,
     ) -> Result<Signature, Box<dyn std::error::Error>> {
-        let frost_signature_shares = self
-            .convert_signature_shares_for_aggregation(
-                signer_names,
-                signature_shares_by_name,
-            )?;
+        let mut frost_signature_shares: BTreeMap<Identifier, SignatureShare> =
+            BTreeMap::new();
+        for &signer_name in signer_names {
+            let signer_id = self.name_to_id(signer_name)?;
+            let signature_share = &signature_shares_by_name[signer_name];
+            frost_signature_shares.insert(signer_id, signature_share.clone());
+        }
         Ok(frost::aggregate(
             signing_package,
             &frost_signature_shares,

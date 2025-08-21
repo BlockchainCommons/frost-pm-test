@@ -12,6 +12,7 @@ use crate::frost_group_config::FROSTGroupConfig;
 
 /// A fully constituted FROST group with all key material needed for signing
 /// This type abstracts away whether keys were generated via trusted dealer or DKG
+#[derive(Debug)]
 pub struct FROSTGroup {
     /// Minimum number of signers required (threshold)
     min_signers: u16,
@@ -205,8 +206,8 @@ impl FROSTGroup {
 }
 
 impl FROSTGroup {
-    /// Convert participant name to identifier (private helper)
-    fn name_to_id(
+    /// Convert participant name to identifier
+    pub fn name_to_id(
         &self,
         name: &str,
     ) -> Result<Identifier, Box<dyn std::error::Error>> {

@@ -44,6 +44,28 @@ impl Group {
         self.id_to_name.get(id).unwrap_or(&"Unknown")
     }
 
+    /// Helper method to perform round1 commit for a participant by name
+    fn commit_for_participant(
+        &self,
+        participant_name: &str,
+        rng: &mut (impl RngCore + CryptoRng),
+    ) -> Result<(SigningNonces, SigningCommitments), Box<dyn std::error::Error>>
+    {
+        let key_package = self.key_package(participant_name)?;
+        Ok(frost::round1::commit(key_package.signing_share(), rng))
+    }
+
+    /// Helper method to perform round2 signing for a participant by name
+    fn sign_for_participant(
+        &self,
+        participant_name: &str,
+        signing_package: &SigningPackage,
+        nonces: &SigningNonces,
+    ) -> Result<SignatureShare, Box<dyn std::error::Error>> {
+        let key_package = self.key_package(participant_name)?;
+        Ok(frost::round2::sign(signing_package, nonces, key_package)?)
+    }
+
     /// Create a new Group using trusted dealer key generation
     pub fn new_with_trusted_dealer(
         config: GroupConfig,
@@ -185,46 +207,62 @@ impl Group {
             .into());
         }
 
-        // Validate all signer names exist and get their key packages
-        let mut key_packages_by_name = BTreeMap::new();
+        // Validate all signer names exist upfront
         for &signer_name in signer_names {
-            let key_package = self.key_package(signer_name)?;
-            key_packages_by_name.insert(signer_name, key_package);
+            self.key_package(signer_name)?; // This validates the name exists
         }
 
         // Round 1: Generate nonces and commitments
-        let mut nonces_map: BTreeMap<Identifier, SigningNonces> =
-            BTreeMap::new();
-        let mut commitments_map: BTreeMap<Identifier, SigningCommitments> =
+        let mut nonces_map: BTreeMap<String, SigningNonces> = BTreeMap::new();
+        let mut commitments_map: BTreeMap<String, SigningCommitments> =
             BTreeMap::new();
 
-        for (signer_name, key_package) in &key_packages_by_name {
-            let signer_id = self.name_to_id(signer_name)?;
+        for &signer_name in signer_names {
             let (nonces, commitments) =
-                frost::round1::commit(key_package.signing_share(), rng);
-            nonces_map.insert(signer_id, nonces);
-            commitments_map.insert(signer_id, commitments);
+                self.commit_for_participant(signer_name, rng)?;
+            nonces_map.insert(signer_name.to_string(), nonces);
+            commitments_map.insert(signer_name.to_string(), commitments);
+        }
+
+        // Convert commitments to the format needed by SigningPackage (which requires Identifier keys)
+        let mut frost_commitments_map: BTreeMap<
+            Identifier,
+            SigningCommitments,
+        > = BTreeMap::new();
+        for (signer_name, commitments) in &commitments_map {
+            let signer_id = self.name_to_id(signer_name)?;
+            frost_commitments_map.insert(signer_id, commitments.clone());
         }
 
         // Create signing package
-        let signing_package = SigningPackage::new(commitments_map, message);
+        let signing_package =
+            SigningPackage::new(frost_commitments_map, message);
 
         // Round 2: Generate signature shares
-        let mut signature_shares: BTreeMap<Identifier, SignatureShare> =
+        let mut signature_shares: BTreeMap<String, SignatureShare> =
             BTreeMap::new();
-        for (signer_name, key_package) in &key_packages_by_name {
-            let signer_id = self.name_to_id(signer_name)?;
-            let nonces = &nonces_map[&signer_id];
+        for &signer_name in signer_names {
+            let nonces = &nonces_map[signer_name];
+            let signature_share = self.sign_for_participant(
+                signer_name,
+                &signing_package,
+                nonces,
+            )?;
+            signature_shares.insert(signer_name.to_string(), signature_share);
+        }
 
-            let signature_share =
-                frost::round2::sign(&signing_package, nonces, key_package)?;
-            signature_shares.insert(signer_id, signature_share);
+        // Convert signature shares to the format needed by aggregate (which requires Identifier keys)
+        let mut frost_signature_shares: BTreeMap<Identifier, SignatureShare> =
+            BTreeMap::new();
+        for (signer_name, signature_share) in &signature_shares {
+            let signer_id = self.name_to_id(signer_name)?;
+            frost_signature_shares.insert(signer_id, signature_share.clone());
         }
 
         // Aggregate signature
         let group_signature = frost::aggregate(
             &signing_package,
-            &signature_shares,
+            &frost_signature_shares,
             &self.public_key_package,
         )?;
 

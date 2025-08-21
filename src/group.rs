@@ -29,17 +29,14 @@ pub struct Group {
 
 impl Group {
     /// Convert participant name to identifier (private helper)
-    fn name_to_id(&self, name: &str) -> Result<Identifier, Box<dyn std::error::Error>> {
-        self.participants.get(name)
+    fn name_to_id(
+        &self,
+        name: &str,
+    ) -> Result<Identifier, Box<dyn std::error::Error>> {
+        self.participants
+            .get(name)
             .cloned()
             .ok_or_else(|| format!("Unknown participant: {}", name).into())
-    }
-
-    /// Convert multiple participant names to identifiers (private helper)
-    fn names_to_ids(&self, names: &[&str]) -> Result<Vec<Identifier>, Box<dyn std::error::Error>> {
-        names.iter()
-            .map(|name| self.name_to_id(name))
-            .collect()
     }
 
     /// Get participant name by identifier (private helper)
@@ -140,10 +137,14 @@ impl Group {
     }
 
     /// Get a reference to a participant's key package by name
-    pub fn key_package(&self, name: &str) -> Result<&KeyPackage, Box<dyn std::error::Error>> {
+    pub fn key_package(
+        &self,
+        name: &str,
+    ) -> Result<&KeyPackage, Box<dyn std::error::Error>> {
         let id = self.name_to_id(name)?;
-        self.key_packages.get(&id)
-            .ok_or_else(|| format!("No key package for participant {}", name).into())
+        self.key_packages.get(&id).ok_or_else(|| {
+            format!("No key package for participant {}", name).into()
+        })
     }
 
     /// Get the public key package for this group
@@ -184,8 +185,12 @@ impl Group {
             .into());
         }
 
-        // Convert names to identifiers
-        let signers = self.names_to_ids(signer_names)?;
+        // Validate all signer names exist and get their key packages
+        let mut key_packages_by_name = BTreeMap::new();
+        for &signer_name in signer_names {
+            let key_package = self.key_package(signer_name)?;
+            key_packages_by_name.insert(signer_name, key_package);
+        }
 
         // Round 1: Generate nonces and commitments
         let mut nonces_map: BTreeMap<Identifier, SigningNonces> =
@@ -193,19 +198,12 @@ impl Group {
         let mut commitments_map: BTreeMap<Identifier, SigningCommitments> =
             BTreeMap::new();
 
-        for signer_id in &signers {
-            let key_package =
-                self.key_packages.get(signer_id).ok_or_else(|| {
-                    format!(
-                        "No key package for signer {}",
-                        self.id_to_name(signer_id)
-                    )
-                })?;
-
+        for (signer_name, key_package) in &key_packages_by_name {
+            let signer_id = self.name_to_id(signer_name)?;
             let (nonces, commitments) =
                 frost::round1::commit(key_package.signing_share(), rng);
-            nonces_map.insert(*signer_id, nonces);
-            commitments_map.insert(*signer_id, commitments);
+            nonces_map.insert(signer_id, nonces);
+            commitments_map.insert(signer_id, commitments);
         }
 
         // Create signing package
@@ -214,13 +212,13 @@ impl Group {
         // Round 2: Generate signature shares
         let mut signature_shares: BTreeMap<Identifier, SignatureShare> =
             BTreeMap::new();
-        for signer_id in &signers {
-            let nonces = &nonces_map[signer_id];
-            let key_package = &self.key_packages[signer_id];
+        for (signer_name, key_package) in &key_packages_by_name {
+            let signer_id = self.name_to_id(signer_name)?;
+            let nonces = &nonces_map[&signer_id];
 
             let signature_share =
                 frost::round2::sign(&signing_package, nonces, key_package)?;
-            signature_shares.insert(*signer_id, signature_share);
+            signature_shares.insert(signer_id, signature_share);
         }
 
         // Aggregate signature

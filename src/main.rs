@@ -46,37 +46,75 @@ use frost_ed25519 as frost;
 
 use rand::thread_rng;
 
-/// Create a mapping of human-readable names to FROST identifiers
-fn create_participant_mapping()
--> Result<BTreeMap<&'static str, Identifier>, Box<dyn std::error::Error>> {
-    let mut participants = BTreeMap::new();
-    participants.insert("Alice", Identifier::try_from(1)?);
-    participants.insert("Bob", Identifier::try_from(2)?);
-    participants.insert("Eve", Identifier::try_from(3)?);
-    Ok(participants)
-}
-
-/// Create a reverse mapping from FROST identifiers to human-readable names
-fn create_identifier_name_mapping()
--> Result<BTreeMap<Identifier, &'static str>, Box<dyn std::error::Error>> {
-    let mut mapping = BTreeMap::new();
-    mapping.insert(Identifier::try_from(1)?, "Alice");
-    mapping.insert(Identifier::try_from(2)?, "Bob");
-    mapping.insert(Identifier::try_from(3)?, "Eve");
-    Ok(mapping)
-}
-
 /// Configuration for the FROST group parameters
 struct GroupConfig {
     /// Minimum number of signers required (threshold)
     min_signers: u16,
     /// Maximum number of participants
     max_signers: u16,
+    /// Mapping of human-readable names to FROST identifiers
+    participants: BTreeMap<&'static str, Identifier>,
+    /// Reverse mapping from FROST identifiers to human-readable names
+    id_to_name: BTreeMap<Identifier, &'static str>,
+}
+
+impl GroupConfig {
+    /// Create a new GroupConfig with the specified threshold and participant names
+    /// The maximum number of signers is automatically derived from the participant names array
+    fn new(
+        min_signers: u16,
+        participant_names: &[&'static str],
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        let max_signers = participant_names.len() as u16;
+
+        if min_signers > max_signers {
+            return Err(format!(
+                "min_signers ({}) cannot be greater than max_signers ({})",
+                min_signers, max_signers
+            )
+            .into());
+        }
+
+        if min_signers == 0 {
+            return Err("min_signers must be at least 1".into());
+        }
+
+        let mut participants = BTreeMap::new();
+        let mut id_to_name = BTreeMap::new();
+
+        for (i, name) in participant_names.iter().enumerate() {
+            let id = Identifier::try_from((i + 1) as u16)?;
+            participants.insert(*name, id);
+            id_to_name.insert(id, *name);
+        }
+
+        Ok(Self { min_signers, max_signers, participants, id_to_name })
+    }
+
+    /// Get the list of participant identifiers
+    fn participant_ids(&self) -> Vec<Identifier> {
+        self.participants.values().cloned().collect()
+    }
+
+    /// Get participant name by identifier
+    fn participant_name(&self, id: &Identifier) -> &'static str {
+        self.id_to_name.get(id).unwrap_or(&"Unknown")
+    }
+
+    /// Get participant names as a comma-separated string
+    fn participant_names_string(&self) -> String {
+        self.participants
+            .keys()
+            .cloned()
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
 }
 
 impl Default for GroupConfig {
     fn default() -> Self {
-        Self { min_signers: 2, max_signers: 3 }
+        Self::new(2, &["Alice", "Bob", "Eve"])
+            .expect("Default GroupConfig should be valid")
     }
 }
 
@@ -108,12 +146,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let signing_session = SigningSession::default();
     let mut rng = thread_rng();
 
-    // Create human-readable participant mappings
-    let participants = create_participant_mapping()?;
-    let id_to_name = create_identifier_name_mapping()?;
-    let participant_ids: Vec<Identifier> =
-        participants.values().cloned().collect();
-
     println!("📋 Demo Configuration:");
     println!("   • Ciphersuite: FROST-ED25519-SHA512-v1");
     println!(
@@ -130,11 +162,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     println!(
         "   • Participants: {}",
-        participants
-            .keys()
-            .map(|s| *s)
-            .collect::<Vec<_>>()
-            .join(", ")
+        group_config.participant_names_string()
     );
     println!();
 
@@ -153,7 +181,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         frost::keys::generate_with_dealer(
             group_config.max_signers,
             group_config.min_signers,
-            frost::keys::IdentifierList::Custom(&participant_ids),
+            frost::keys::IdentifierList::Custom(
+                &group_config.participant_ids(),
+            ),
             &mut rng,
         )?;
 
@@ -181,7 +211,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     for (identifier, secret_share) in &secret_shares {
         let key_package = KeyPackage::try_from(secret_share.clone())?;
         key_packages.insert(*identifier, key_package);
-        let participant_name = id_to_name.get(identifier).unwrap_or(&"Unknown");
+        let participant_name = group_config.participant_name(identifier);
         println!(
             "   ✅ Created key package for participant {}",
             participant_name
@@ -210,8 +240,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .collect();
 
     for (i, participant_id) in signing_participants.iter().enumerate() {
-        let participant_name =
-            id_to_name.get(participant_id).unwrap_or(&"Unknown");
+        let participant_name = group_config.participant_name(participant_id);
         println!("   👤 Participant {}: {}", i + 1, participant_name);
     }
     println!();
@@ -240,7 +269,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         println!(
             "   ✅ Participant {} generated nonces and commitments",
-            id_to_name.get(participant_id).unwrap_or(&"Unknown")
+            group_config.participant_name(participant_id)
         );
     }
 
@@ -292,7 +321,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         println!(
             "   ✅ Participant {} created signature share",
-            id_to_name.get(participant_id).unwrap_or(&"Unknown")
+            group_config.participant_name(participant_id)
         );
     }
 
@@ -448,4 +477,94 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    impl GroupConfig {
+        /// Create a predefined 3-of-5 configuration with corporate participants
+        pub fn corporate_board() -> Result<Self, Box<dyn std::error::Error>> {
+            Self::new(3, &["CEO", "CFO", "CTO", "COO", "CLO"])
+        }
+
+        /// Create a predefined 2-of-4 configuration with family members
+        pub fn family() -> Result<Self, Box<dyn std::error::Error>> {
+            Self::new(2, &["Alice", "Bob", "Charlie", "Diana"])
+        }
+    }
+
+    #[test]
+    fn test_default_config() {
+        let config = GroupConfig::default();
+        assert_eq!(config.min_signers, 2);
+        assert_eq!(config.max_signers, 3);
+        assert_eq!(config.participants.len(), 3);
+        assert!(config.participants.contains_key("Alice"));
+        assert!(config.participants.contains_key("Bob"));
+        assert!(config.participants.contains_key("Eve"));
+    }
+
+    #[test]
+    fn test_corporate_board_config() {
+        let config = GroupConfig::corporate_board().unwrap();
+        assert_eq!(config.min_signers, 3);
+        assert_eq!(config.max_signers, 5);
+        assert_eq!(config.participants.len(), 5);
+        assert!(config.participants.contains_key("CEO"));
+        assert!(config.participants.contains_key("CFO"));
+        assert!(config.participants.contains_key("CTO"));
+        assert!(config.participants.contains_key("COO"));
+        assert!(config.participants.contains_key("CLO"));
+    }
+
+    #[test]
+    fn test_family_config() {
+        let config = GroupConfig::family().unwrap();
+        assert_eq!(config.min_signers, 2);
+        assert_eq!(config.max_signers, 4);
+        assert_eq!(config.participants.len(), 4);
+        assert!(config.participants.contains_key("Alice"));
+        assert!(config.participants.contains_key("Bob"));
+        assert!(config.participants.contains_key("Charlie"));
+        assert!(config.participants.contains_key("Diana"));
+    }
+
+    #[test]
+    fn test_config_validation() {
+        // Test min_signers = 0
+        let result = GroupConfig::new(0, &["Alice", "Bob"]);
+        assert!(result.is_err());
+
+        // Test min_signers > max_signers
+        let result = GroupConfig::new(5, &["Alice", "Bob"]);
+        assert!(result.is_err());
+
+        // Test valid config
+        let result = GroupConfig::new(2, &["Alice", "Bob", "Charlie"]);
+        assert!(result.is_ok());
+        let config = result.unwrap();
+        assert_eq!(config.min_signers, 2);
+        assert_eq!(config.max_signers, 3);
+    }
+
+    #[test]
+    fn test_participant_name_lookup() {
+        let config = GroupConfig::default();
+        let alice_id = config.participants["Alice"];
+        assert_eq!(config.participant_name(&alice_id), "Alice");
+
+        // Test unknown identifier
+        let unknown_id = frost::Identifier::try_from(99u16).unwrap();
+        assert_eq!(config.participant_name(&unknown_id), "Unknown");
+    }
+
+    #[test]
+    fn test_participant_names_string() {
+        let config = GroupConfig::default();
+        let names = config.participant_names_string();
+        // BTreeMap maintains sorted order, so we can predict the output
+        assert_eq!(names, "Alice, Bob, Eve");
+    }
 }

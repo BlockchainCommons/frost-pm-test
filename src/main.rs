@@ -38,16 +38,16 @@ use std::collections::BTreeMap;
 // FROST ED25519 imports
 use frost::{
     Identifier, Signature, SigningPackage,
-    keys::KeyPackage,
+    keys::{KeyPackage, PublicKeyPackage},
     round1::{SigningCommitments, SigningNonces},
     round2::SignatureShare,
 };
 use frost_ed25519 as frost;
 
-use rand::thread_rng;
+use rand::{thread_rng, CryptoRng, RngCore};
 
 /// Configuration for the FROST group parameters
-struct GroupConfig {
+pub struct GroupConfig {
     /// Minimum number of signers required (threshold)
     min_signers: u16,
     /// Maximum number of participants
@@ -118,6 +118,195 @@ impl Default for GroupConfig {
     }
 }
 
+/// A fully constituted FROST group with all key material needed for signing
+/// This type abstracts away whether keys were generated via trusted dealer or DKG
+pub struct Group {
+    /// Minimum number of signers required (threshold)
+    min_signers: u16,
+    /// Maximum number of participants
+    max_signers: u16,
+    /// Mapping of human-readable names to FROST identifiers
+    participants: BTreeMap<&'static str, Identifier>,
+    /// Reverse mapping from FROST identifiers to human-readable names
+    id_to_name: BTreeMap<Identifier, &'static str>,
+    /// Key packages for each participant (contains signing shares)
+    key_packages: BTreeMap<Identifier, KeyPackage>,
+    /// The group's public key package (for verification and coordination)
+    public_key_package: PublicKeyPackage,
+}
+
+impl Group {
+    /// Create a new Group using trusted dealer key generation
+    pub fn new_with_trusted_dealer(config: GroupConfig, rng: &mut (impl RngCore + CryptoRng)) -> Result<Self, Box<dyn std::error::Error>> {
+        // Generate secret shares using trusted dealer
+        let (secret_shares, public_key_package) = frost::keys::generate_with_dealer(
+            config.max_signers,
+            config.min_signers,
+            frost::keys::IdentifierList::Custom(&config.participant_ids()),
+            rng,
+        )?;
+
+        // Convert secret shares to key packages
+        let mut key_packages: BTreeMap<Identifier, KeyPackage> = BTreeMap::new();
+        for (identifier, secret_share) in &secret_shares {
+            let key_package = KeyPackage::try_from(secret_share.clone())?;
+            key_packages.insert(*identifier, key_package);
+        }
+
+        Ok(Self {
+            min_signers: config.min_signers,
+            max_signers: config.max_signers,
+            participants: config.participants,
+            id_to_name: config.id_to_name,
+            key_packages,
+            public_key_package,
+        })
+    }
+
+    /// Create a new Group from existing key material (e.g., from DKG)
+    pub fn new_from_key_material(
+        config: GroupConfig,
+        key_packages: BTreeMap<Identifier, KeyPackage>,
+        public_key_package: PublicKeyPackage,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        // Validate that we have key packages for all participants
+        if key_packages.len() != config.max_signers as usize {
+            return Err(format!(
+                "Expected {} key packages, got {}",
+                config.max_signers,
+                key_packages.len()
+            ).into());
+        }
+
+        // Validate that all participant identifiers have corresponding key packages
+        for participant_id in config.participants.values() {
+            if !key_packages.contains_key(participant_id) {
+                return Err(format!(
+                    "Missing key package for participant {}",
+                    config.participant_name(participant_id)
+                ).into());
+            }
+        }
+
+        Ok(Self {
+            min_signers: config.min_signers,
+            max_signers: config.max_signers,
+            participants: config.participants,
+            id_to_name: config.id_to_name,
+            key_packages,
+            public_key_package,
+        })
+    }
+
+    /// Get the minimum number of signers required (threshold)
+    pub fn min_signers(&self) -> u16 {
+        self.min_signers
+    }
+
+    /// Get the maximum number of participants
+    pub fn max_signers(&self) -> u16 {
+        self.max_signers
+    }
+
+    /// Get participant name by identifier
+    pub fn participant_name(&self, id: &Identifier) -> &'static str {
+        self.id_to_name.get(id).unwrap_or(&"Unknown")
+    }
+
+    /// Get participant names as a comma-separated string
+    pub fn participant_names_string(&self) -> String {
+        self.participants
+            .keys()
+            .cloned()
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
+
+    /// Get the list of all participant identifiers
+    pub fn participant_ids(&self) -> Vec<Identifier> {
+        self.participants.values().cloned().collect()
+    }
+
+    /// Get a reference to a participant's key package
+    pub fn key_package(&self, id: &Identifier) -> Option<&KeyPackage> {
+        self.key_packages.get(id)
+    }
+
+    /// Get all key packages
+    pub fn key_packages(&self) -> &BTreeMap<Identifier, KeyPackage> {
+        &self.key_packages
+    }
+
+    /// Get the public key package for this group
+    pub fn public_key_package(&self) -> &PublicKeyPackage {
+        &self.public_key_package
+    }
+
+    /// Get the group's verifying key (public key)
+    pub fn verifying_key(&self) -> &frost::VerifyingKey {
+        self.public_key_package.verifying_key()
+    }
+
+    /// Select a subset of participants for signing (up to min_signers)
+    pub fn select_signers(&self, count: Option<usize>) -> Vec<Identifier> {
+        let signer_count = count.unwrap_or(self.min_signers as usize);
+        self.key_packages
+            .keys()
+            .take(signer_count.min(self.max_signers as usize))
+            .cloned()
+            .collect()
+    }
+
+    /// Perform a complete signing ceremony with the specified signers and message
+    pub fn sign(&self, message: &[u8], signers: &[Identifier], rng: &mut (impl RngCore + CryptoRng)) -> Result<Signature, Box<dyn std::error::Error>> {
+        if signers.len() < self.min_signers as usize {
+            return Err(format!(
+                "Need at least {} signers, got {}",
+                self.min_signers,
+                signers.len()
+            ).into());
+        }
+
+        // Round 1: Generate nonces and commitments
+        let mut nonces_map: BTreeMap<Identifier, SigningNonces> = BTreeMap::new();
+        let mut commitments_map: BTreeMap<Identifier, SigningCommitments> = BTreeMap::new();
+
+        for signer_id in signers {
+            let key_package = self.key_packages.get(signer_id)
+                .ok_or_else(|| format!("No key package for signer {}", self.participant_name(signer_id)))?;
+
+            let (nonces, commitments) = frost::round1::commit(key_package.signing_share(), rng);
+            nonces_map.insert(*signer_id, nonces);
+            commitments_map.insert(*signer_id, commitments);
+        }
+
+        // Create signing package
+        let signing_package = SigningPackage::new(commitments_map, message);
+
+        // Round 2: Generate signature shares
+        let mut signature_shares: BTreeMap<Identifier, SignatureShare> = BTreeMap::new();
+        for signer_id in signers {
+            let nonces = &nonces_map[signer_id];
+            let key_package = &self.key_packages[signer_id];
+
+            let signature_share = frost::round2::sign(&signing_package, nonces, key_package)?;
+            signature_shares.insert(*signer_id, signature_share);
+        }
+
+        // Aggregate signature
+        let group_signature = frost::aggregate(&signing_package, &signature_shares, &self.public_key_package)?;
+
+        Ok(group_signature)
+    }
+
+    /// Verify a signature against a message using the group's public key
+    pub fn verify(&self, message: &[u8], signature: &Signature) -> Result<(), Box<dyn std::error::Error>> {
+        self.verifying_key()
+            .verify(message, signature)
+            .map_err(|e| e.into())
+    }
+}
+
 /// Configuration for a signing session
 struct SigningSession {
     /// Message to be signed
@@ -167,260 +356,106 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!();
 
     // =============================================================================
-    // STEP 1: TRUSTED DEALER KEY GENERATION
-    // Generate secret shares for all participants using a trusted dealer approach
+    // STEP 1: GROUP FORMATION
+    // Create a fully constituted FROST group with all necessary key material
     // =============================================================================
 
-    println!("🔑 STEP 1: Trusted Dealer Key Generation");
-    println!(
-        "   Generating secret shares for {} participants with threshold {}...",
-        group_config.max_signers, group_config.min_signers
-    );
+    println!("🏗️  STEP 1: Group Formation");
+    println!("   Creating FROST group using trusted dealer key generation...");
 
-    let (secret_shares, public_key_package) =
-        frost::keys::generate_with_dealer(
-            group_config.max_signers,
-            group_config.min_signers,
-            frost::keys::IdentifierList::Custom(
-                &group_config.participant_ids(),
-            ),
-            &mut rng,
-        )?;
+    let group = Group::new_with_trusted_dealer(group_config, &mut rng)?;
 
-    println!("   ✅ Generated {} secret shares", secret_shares.len());
-    println!("   ✅ Created public key package");
-
-    // Display some key information
-    let group_public_key = public_key_package.verifying_key();
-    let group_key_bytes = group_public_key.serialize()?;
-    println!("   📝 Group public key: {}", hex::encode(&group_key_bytes));
+    println!("   ✅ Group formed successfully");
+    println!("   📝 Group public key: {}", hex::encode(&group.verifying_key().serialize()?));
+    println!("   � {} participants configured with key packages", group.max_signers());
     println!();
 
     // =============================================================================
-    // STEP 2: KEY PACKAGE CREATION
-    // Convert secret shares to key packages that participants will use for signing
+    // STEP 2: PARTICIPANT VERIFICATION
+    // Verify all participants have valid key packages
     // =============================================================================
 
-    println!("🔧 STEP 2: Key Package Creation");
-    println!(
-        "   Converting secret shares to key packages for each participant..."
-    );
+    println!("🔧 STEP 2: Participant Verification");
+    println!("   Verifying key packages for all participants...");
 
-    let mut key_packages: BTreeMap<Identifier, KeyPackage> = BTreeMap::new();
-
-    for (identifier, secret_share) in &secret_shares {
-        let key_package = KeyPackage::try_from(secret_share.clone())?;
-        key_packages.insert(*identifier, key_package);
-        let participant_name = group_config.participant_name(identifier);
-        println!(
-            "   ✅ Created key package for participant {}",
-            participant_name
-        );
+    for participant_id in group.participant_ids() {
+        let participant_name = group.participant_name(&participant_id);
+        if group.key_package(&participant_id).is_some() {
+            println!("   ✅ {} has valid key package", participant_name);
+        }
     }
 
-    println!("   📦 Total key packages created: {}", key_packages.len());
+    println!("   📦 All {} key packages verified", group.max_signers());
     println!();
 
     // =============================================================================
-    // STEP 3: PARTICIPANT SELECTION
-    // Select which participants will participate in this signing ceremony
-    // For this demo, we'll use the first 2 participants (satisfying the 2-of-3 threshold)
+    // STEP 3: SIGNING CEREMONY
+    // Perform a complete FROST threshold signature using the group
     // =============================================================================
 
-    println!("👥 STEP 3: Participant Selection");
-    println!(
-        "   Selecting {} participants for this signing ceremony...",
-        group_config.min_signers
-    );
+    println!("✍️  STEP 3: Signing Ceremony");
+    println!("   Selecting {} signers for threshold signature...", group.min_signers());
 
-    let signing_participants: Vec<Identifier> = key_packages
-        .keys()
-        .take(group_config.min_signers as usize)
-        .cloned()
-        .collect();
+    // Select signers (in this case, the first min_signers participants)
+    let signers = group.select_signers(None);
 
-    for (i, participant_id) in signing_participants.iter().enumerate() {
-        let participant_name = group_config.participant_name(participant_id);
-        println!("   👤 Participant {}: {}", i + 1, participant_name);
+    for (i, signer_id) in signers.iter().enumerate() {
+        let participant_name = group.participant_name(signer_id);
+        println!("   👤 Signer {}: {}", i + 1, participant_name);
     }
     println!();
 
-    // =============================================================================
-    // STEP 4: ROUND 1 - COMMITMENT PHASE
-    // Each participating signer generates nonces and creates commitments
-    // =============================================================================
+    println!("   🎲 Executing FROST signing protocol...");
+    println!("   📝 Message: {:?}", std::str::from_utf8(signing_session.message).unwrap_or("<binary>"));
 
-    println!("🎲 STEP 4: Round 1 - Commitment Phase");
-    println!("   Each participant generates nonces and commitments...");
+    // Perform the complete signing ceremony
+    let group_signature = group.sign(signing_session.message, &signers, &mut rng)?;
 
-    let mut nonces_map: BTreeMap<Identifier, SigningNonces> = BTreeMap::new();
-    let mut commitments_map: BTreeMap<Identifier, SigningCommitments> =
-        BTreeMap::new();
-
-    for participant_id in &signing_participants {
-        let key_package = &key_packages[participant_id];
-
-        // Generate nonces and commitments for this participant
-        let (nonces, commitments) =
-            frost::round1::commit(key_package.signing_share(), &mut rng);
-
-        nonces_map.insert(*participant_id, nonces);
-        commitments_map.insert(*participant_id, commitments);
-
-        println!(
-            "   ✅ Participant {} generated nonces and commitments",
-            group_config.participant_name(participant_id)
-        );
-    }
-
-    println!(
-        "   🎯 Round 1 complete: {} participants ready",
-        nonces_map.len()
-    );
-    println!();
-
-    // =============================================================================
-    // STEP 5: SIGNING PACKAGE CREATION
-    // The coordinator creates a signing package containing the message and all commitments
-    // =============================================================================
-
-    println!("📦 STEP 5: Signing Package Creation");
-    println!("   Creating signing package with message and commitments...");
-
-    let signing_package =
-        SigningPackage::new(commitments_map.clone(), signing_session.message);
-
-    println!("   ✅ Signing package created");
-    println!(
-        "   📝 Package contains {} commitments",
-        commitments_map.len()
-    );
-    println!("   📝 Message hash included in package");
-    println!();
-
-    // =============================================================================
-    // STEP 6: ROUND 2 - SIGNATURE SHARE GENERATION
-    // Each participant creates a signature share using their nonces and the signing package
-    // =============================================================================
-
-    println!("✍️  STEP 6: Round 2 - Signature Share Generation");
-    println!("   Each participant creates a signature share...");
-
-    let mut signature_shares: BTreeMap<Identifier, SignatureShare> =
-        BTreeMap::new();
-
-    for participant_id in &signing_participants {
-        let nonces = &nonces_map[participant_id];
-        let key_package = &key_packages[participant_id];
-
-        // Generate signature share for this participant
-        let signature_share =
-            frost::round2::sign(&signing_package, nonces, key_package)?;
-
-        signature_shares.insert(*participant_id, signature_share);
-
-        println!(
-            "   ✅ Participant {} created signature share",
-            group_config.participant_name(participant_id)
-        );
-    }
-
-    println!(
-        "   🎯 Round 2 complete: {} signature shares collected",
-        signature_shares.len()
-    );
-    println!();
-
-    // =============================================================================
-    // STEP 7: SIGNATURE AGGREGATION
-    // The coordinator combines all signature shares into the final group signature
-    // =============================================================================
-
-    println!("🔗 STEP 7: Signature Aggregation");
-    println!("   Combining signature shares into final group signature...");
-
-    let group_signature: Signature = frost::aggregate(
-        &signing_package,
-        &signature_shares,
-        &public_key_package,
-    )?;
-
-    println!("   ✅ Group signature successfully aggregated");
-
-    // Display signature information
+    println!("   ✅ Group signature generated successfully");
     let signature_bytes = group_signature.serialize()?;
     println!("   📝 Signature length: {} bytes", signature_bytes.len());
     println!("   📝 Signature (hex): {}", hex::encode(&signature_bytes));
     println!();
 
     // =============================================================================
-    // STEP 8: SIGNATURE VERIFICATION
-    // Verify that the aggregated signature is valid for the original message
+    // STEP 4: SIGNATURE VERIFICATION
+    // Verify the signature using the group's public key
     // =============================================================================
 
-    println!("✅ STEP 8: Signature Verification");
-    println!(
-        "   Verifying the aggregated signature against the original message..."
-    );
+    println!("✅ STEP 4: Signature Verification");
+    println!("   Verifying signature against the original message...");
 
-    // Perform cryptographic verification
-    let verification_result = public_key_package
-        .verifying_key()
-        .verify(signing_session.message, &group_signature);
-
-    match verification_result {
+    match group.verify(signing_session.message, &group_signature) {
         Ok(()) => {
             println!("   🎉 Signature verification: PASSED");
-            println!(
-                "   ✅ The message was successfully signed using FROST threshold signature"
-            );
+            println!("   ✅ The message was successfully signed using FROST threshold signature");
         }
         Err(error) => {
             println!("   ❌ Signature verification: FAILED");
             println!("   💥 Error: {:?}", error);
-            return Err(Box::new(error));
+            return Err(error);
         }
     }
     println!();
 
     // =============================================================================
-    // STEP 9: DEMONSTRATION SUMMARY
+    // STEP 5: DEMONSTRATION SUMMARY
     // Display a comprehensive summary of what was accomplished
     // =============================================================================
 
-    println!("📊 STEP 9: Demo Summary and Validation");
+    println!("📊 STEP 5: Demo Summary and Validation");
     println!("════════════════════════════════════════");
 
     // Validate all the key properties of our FROST ceremony
     assert_eq!(
-        secret_shares.len(),
-        group_config.max_signers as usize,
-        "Should have correct number of secret shares"
-    );
-    assert_eq!(
-        key_packages.len(),
-        group_config.max_signers as usize,
+        group.key_packages().len(),
+        group.max_signers() as usize,
         "Should have correct number of key packages"
     );
     assert_eq!(
-        signing_participants.len(),
-        group_config.min_signers as usize,
+        signers.len(),
+        group.min_signers() as usize,
         "Should have correct number of signing participants"
-    );
-    assert_eq!(
-        nonces_map.len(),
-        group_config.min_signers as usize,
-        "Should have correct number of nonce sets"
-    );
-    assert_eq!(
-        commitments_map.len(),
-        group_config.min_signers as usize,
-        "Should have correct number of commitments"
-    );
-    assert_eq!(
-        signature_shares.len(),
-        group_config.min_signers as usize,
-        "Should have correct number of signature shares"
     );
     assert_eq!(
         signature_bytes.len(),
@@ -432,21 +467,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!();
 
     println!("🏆 FROST Protocol Demo Results:");
-    println!("   🔑 Key generation: ✅ COMPLETED");
-    println!("   👥 Participant setup: ✅ COMPLETED");
-    println!("   🎲 Round 1 (commitments): ✅ COMPLETED");
-    println!("   📦 Signing package: ✅ COMPLETED");
-    println!("   ✍️  Round 2 (signature shares): ✅ COMPLETED");
-    println!("   🔗 Signature aggregation: ✅ COMPLETED");
+    println!("   🏗️  Group formation: ✅ COMPLETED");
+    println!("   � Key package verification: ✅ COMPLETED");
+    println!("   ✍️  Threshold signing ceremony: ✅ COMPLETED");
     println!("   ✅ Cryptographic verification: ✅ PASSED");
     println!();
 
     println!("📈 Protocol Statistics:");
-    println!("   • Total participants: {}", group_config.max_signers);
-    println!("   • Signing participants: {}", group_config.min_signers);
+    println!("   • Total participants: {}", group.max_signers());
+    println!("   • Signing participants: {}", group.min_signers());
     println!(
         "   • Threshold: {} of {}",
-        group_config.min_signers, group_config.max_signers
+        group.min_signers(), group.max_signers()
     );
     println!(
         "   • Message length: {} bytes",
@@ -455,7 +487,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("   • Signature length: {} bytes", signature_bytes.len());
     println!(
         "   • Group public key length: {} bytes",
-        group_key_bytes.len()
+        group.verifying_key().serialize()?.len()
     );
     println!("   • Ciphersuite: FROST-ED25519-SHA512-v1");
     println!();
@@ -466,9 +498,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("   • Validated cryptographic correctness of all operations");
     println!(
         "   • Showed how {} participants can jointly sign with only {} signatures",
-        group_config.max_signers, group_config.min_signers
+        group.max_signers(), group.min_signers()
     );
     println!("   • Used secure ED25519 elliptic curve cryptography");
+    println!("   • Abstracted key generation method (trusted dealer used)");
     println!();
 
     println!("🎉 FROST 2-of-3 Threshold Signature Demo: SUCCESS!");
@@ -566,5 +599,79 @@ mod tests {
         let names = config.participant_names_string();
         // BTreeMap maintains sorted order, so we can predict the output
         assert_eq!(names, "Alice, Bob, Eve");
+    }
+
+    #[test]
+    fn test_group_creation_with_trusted_dealer() {
+        let config = GroupConfig::default();
+        let mut rng = rand::thread_rng();
+
+        let group = Group::new_with_trusted_dealer(config, &mut rng).unwrap();
+
+        assert_eq!(group.min_signers(), 2);
+        assert_eq!(group.max_signers(), 3);
+        assert_eq!(group.key_packages().len(), 3);
+        assert_eq!(group.participant_names_string(), "Alice, Bob, Eve");
+
+        // Verify all participants have key packages
+        for participant_id in group.participant_ids() {
+            assert!(group.key_package(&participant_id).is_some());
+        }
+    }
+
+    #[test]
+    fn test_group_signing() {
+        let config = GroupConfig::default();
+        let mut rng = rand::thread_rng();
+
+        let group = Group::new_with_trusted_dealer(config, &mut rng).unwrap();
+        let message = b"Test message for FROST signing";
+
+        // Select signers
+        let signers = group.select_signers(None);
+        assert_eq!(signers.len(), 2); // min_signers
+
+        // Perform signing
+        let signature = group.sign(message, &signers, &mut rng).unwrap();
+
+        // Verify signature
+        assert!(group.verify(message, &signature).is_ok());
+
+        // Verify with wrong message fails
+        let wrong_message = b"Wrong message";
+        assert!(group.verify(wrong_message, &signature).is_err());
+    }
+
+    #[test]
+    fn test_group_insufficient_signers() {
+        let config = GroupConfig::default();
+        let mut rng = rand::thread_rng();
+
+        let group = Group::new_with_trusted_dealer(config, &mut rng).unwrap();
+        let message = b"Test message";
+
+        // Try to sign with only 1 signer (need 2 for threshold)
+        let insufficient_signers = vec![group.participant_ids()[0]];
+
+        let result = group.sign(message, &insufficient_signers, &mut rng);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Need at least 2 signers"));
+    }
+
+    #[test]
+    fn test_corporate_board_signing() {
+        let config = GroupConfig::corporate_board().unwrap();
+        let mut rng = rand::thread_rng();
+
+        let group = Group::new_with_trusted_dealer(config, &mut rng).unwrap();
+        assert_eq!(group.min_signers(), 3);
+        assert_eq!(group.max_signers(), 5);
+
+        let message = b"Corporate board resolution";
+        let signers = group.select_signers(None); // Should select 3 signers
+        assert_eq!(signers.len(), 3);
+
+        let signature = group.sign(message, &signers, &mut rng).unwrap();
+        assert!(group.verify(message, &signature).is_ok());
     }
 }

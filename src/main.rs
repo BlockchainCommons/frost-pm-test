@@ -14,6 +14,7 @@ signing ceremony using the ED25519 ciphersuite. It demonstrates all stages of th
 
 This implementation uses direct library calls to the FROST implementation for educational purposes.
 No user interaction is required - the binary runs autonomously and outputs progress to the console.
+Participants are identified with human-readable names (Alice, Bob, Eve) for clarity.
 
 ## Usage
 
@@ -26,7 +27,7 @@ cargo run --bin frost-pm-test
 - **Ciphersuite**: FROST-ED25519-SHA512-v1
 - **Threshold**: 2-of-3 (minimum 2 signers required)
 - **Message**: "Hello, FROST! This is a 2-of-3 threshold signature demo."
-- **Participants**: 3 total participants, with participants 1 and 2 selected for signing
+- **Participants**: Alice, Bob, and Eve (3 total participants, with Alice and Bob selected for signing)
 
 The demo follows the FROST specification RFC draft and demonstrates the complete protocol flow
 without network communication (all done in-memory for simplicity).
@@ -37,13 +38,33 @@ use std::collections::BTreeMap;
 // FROST ED25519 imports
 use frost::{
     Identifier, Signature, SigningPackage,
-    keys::{IdentifierList, KeyPackage},
+    keys::KeyPackage,
     round1::{SigningCommitments, SigningNonces},
     round2::SignatureShare,
 };
 use frost_ed25519 as frost;
 
 use rand::thread_rng;
+
+/// Create a mapping of human-readable names to FROST identifiers
+fn create_participant_mapping()
+-> Result<BTreeMap<&'static str, Identifier>, Box<dyn std::error::Error>> {
+    let mut participants = BTreeMap::new();
+    participants.insert("Alice", Identifier::try_from(1)?);
+    participants.insert("Bob", Identifier::try_from(2)?);
+    participants.insert("Eve", Identifier::try_from(3)?);
+    Ok(participants)
+}
+
+/// Create a reverse mapping from FROST identifiers to human-readable names
+fn create_identifier_name_mapping()
+-> Result<BTreeMap<Identifier, &'static str>, Box<dyn std::error::Error>> {
+    let mut mapping = BTreeMap::new();
+    mapping.insert(Identifier::try_from(1)?, "Alice");
+    mapping.insert(Identifier::try_from(2)?, "Bob");
+    mapping.insert(Identifier::try_from(3)?, "Eve");
+    Ok(mapping)
+}
 
 /// Configuration for the FROST group parameters
 struct GroupConfig {
@@ -87,6 +108,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let signing_session = SigningSession::default();
     let mut rng = thread_rng();
 
+    // Create human-readable participant mappings
+    let participants = create_participant_mapping()?;
+    let id_to_name = create_identifier_name_mapping()?;
+    let participant_ids: Vec<Identifier> =
+        participants.values().cloned().collect();
+
     println!("📋 Demo Configuration:");
     println!("   • Ciphersuite: FROST-ED25519-SHA512-v1");
     println!(
@@ -100,6 +127,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!(
         "   • Message length: {} bytes",
         signing_session.message.len()
+    );
+    println!(
+        "   • Participants: {}",
+        participants
+            .keys()
+            .map(|s| *s)
+            .collect::<Vec<_>>()
+            .join(", ")
     );
     println!();
 
@@ -118,7 +153,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         frost::keys::generate_with_dealer(
             group_config.max_signers,
             group_config.min_signers,
-            IdentifierList::Default,
+            frost::keys::IdentifierList::Custom(&participant_ids),
             &mut rng,
         )?;
 
@@ -146,7 +181,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     for (identifier, secret_share) in &secret_shares {
         let key_package = KeyPackage::try_from(secret_share.clone())?;
         key_packages.insert(*identifier, key_package);
-        println!("   ✅ Created key package for participant {:?}", identifier);
+        let participant_name = id_to_name.get(identifier).unwrap_or(&"Unknown");
+        println!(
+            "   ✅ Created key package for participant {}",
+            participant_name
+        );
     }
 
     println!("   📦 Total key packages created: {}", key_packages.len());
@@ -171,7 +210,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .collect();
 
     for (i, participant_id) in signing_participants.iter().enumerate() {
-        println!("   👤 Participant {}: {:?}", i + 1, participant_id);
+        let participant_name =
+            id_to_name.get(participant_id).unwrap_or(&"Unknown");
+        println!("   👤 Participant {}: {}", i + 1, participant_name);
     }
     println!();
 
@@ -198,8 +239,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         commitments_map.insert(*participant_id, commitments);
 
         println!(
-            "   ✅ Participant {:?} generated nonces and commitments",
-            participant_id
+            "   ✅ Participant {} generated nonces and commitments",
+            id_to_name.get(participant_id).unwrap_or(&"Unknown")
         );
     }
 
@@ -250,8 +291,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         signature_shares.insert(*participant_id, signature_share);
 
         println!(
-            "   ✅ Participant {:?} created signature share",
-            participant_id
+            "   ✅ Participant {} created signature share",
+            id_to_name.get(participant_id).unwrap_or(&"Unknown")
         );
     }
 

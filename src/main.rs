@@ -40,21 +40,6 @@ use group::Group;
 use group_config::GroupConfig;
 use rand::thread_rng;
 
-/// Configuration for a signing session
-struct SigningSession {
-    /// Message to be signed
-    message: &'static [u8],
-}
-
-impl Default for SigningSession {
-    fn default() -> Self {
-        Self {
-            message:
-                b"Hello, FROST! This is a 2-of-3 threshold signature demo.",
-        }
-    }
-}
-
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!(
         "🚀 FROST Protocol Demo - 2-of-3 Threshold Signature with ED25519"
@@ -65,7 +50,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!();
 
     let group_config = GroupConfig::default();
-    let signing_session = SigningSession::default();
+    let message = b"Hello, FROST! This is a 2-of-3 threshold signature demo.";
     let mut rng = thread_rng();
 
     println!("📋 Demo Configuration:");
@@ -77,11 +62,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     println!(
         "   • Message: {:?}",
-        std::str::from_utf8(signing_session.message).unwrap_or("<binary>")
+        std::str::from_utf8(message).unwrap_or("<binary>")
     );
     println!(
         "   • Message length: {} bytes",
-        signing_session.message.len()
+        message.len()
     );
     println!(
         "   • Participants: {}",
@@ -154,12 +139,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("   🎲 Executing FROST signing protocol...");
     println!(
         "   📝 Message: {:?}",
-        std::str::from_utf8(signing_session.message).unwrap_or("<binary>")
+        std::str::from_utf8(message).unwrap_or("<binary>")
     );
 
     // Perform the complete signing ceremony
     let group_signature =
-        group.sign(signing_session.message, &signers, &mut rng)?;
+        group.sign(message, &signers, &mut rng)?;
 
     println!("   ✅ Group signature generated successfully");
     let signature_bytes = group_signature.serialize()?;
@@ -175,7 +160,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("✅ STEP 4: Signature Verification");
     println!("   Verifying signature against the original message...");
 
-    match group.verify(signing_session.message, &group_signature) {
+    match group.verify(message, &group_signature) {
         Ok(()) => {
             println!("   🎉 Signature verification: PASSED");
             println!(
@@ -235,7 +220,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     println!(
         "   • Message length: {} bytes",
-        signing_session.message.len()
+        message.len()
     );
     println!("   • Signature length: {} bytes", signature_bytes.len());
     println!(

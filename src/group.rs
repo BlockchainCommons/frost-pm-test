@@ -103,15 +103,6 @@ impl Group {
         self.participants.contains_key(name)
     }
 
-    /// Get participant names as a comma-separated string
-    pub fn participant_names_string(&self) -> String {
-        self.participants
-            .keys()
-            .cloned()
-            .collect::<Vec<_>>()
-            .join(", ")
-    }
-
     /// Get the list of all participant names
     pub fn participant_names(&self) -> Vec<&'static str> {
         self.participants.keys().cloned().collect()

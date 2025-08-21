@@ -20,7 +20,7 @@ fn test_group_creation_with_trusted_dealer() {
     assert_eq!(group.min_signers(), 2);
     assert_eq!(group.max_signers(), 3);
     assert_eq!(group.participant_names().len(), 3);
-    assert_eq!(group.participant_names_string(), "Alice, Bob, Eve");
+    assert_eq!(group.participant_names().join(", "), "Alice, Bob, Eve");
 
     // Verify all participants have key packages
     for participant_name in group.participant_names() {
@@ -116,7 +116,7 @@ fn test_group_participant_management() {
     }
 
     // Test participant names string
-    let names_string = group.participant_names_string();
+    let names_string = group.participant_names().join(", ");
     assert_eq!(names_string, "Alice, Bob, Eve");
 }
 

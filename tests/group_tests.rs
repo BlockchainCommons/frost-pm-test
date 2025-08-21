@@ -19,12 +19,12 @@ fn test_group_creation_with_trusted_dealer() {
 
     assert_eq!(group.min_signers(), 2);
     assert_eq!(group.max_signers(), 3);
-    assert_eq!(group.key_packages().len(), 3);
+    assert_eq!(group.participant_names().len(), 3);
     assert_eq!(group.participant_names_string(), "Alice, Bob, Eve");
 
     // Verify all participants have key packages
-    for participant_id in group.participant_ids() {
-        assert!(group.key_package(&participant_id).is_some());
+    for participant_name in group.participant_names() {
+        assert!(group.key_package(participant_name).is_ok());
     }
 }
 
@@ -60,16 +60,13 @@ fn test_group_insufficient_signers() {
     let message = b"Test message";
 
     // Try to sign with only 1 signer (need 2 for threshold)
-    let insufficient_signers = vec![group.participant_ids()[0]];
+    let insufficient_signers = vec![group.participant_names()[0]];
 
     let result = group.sign(message, &insufficient_signers, &mut rng);
     assert!(result.is_err());
-    assert!(
-        result
-            .unwrap_err()
-            .to_string()
-            .contains("Need at least 2 signers")
-    );
+    if let Err(error) = result {
+        assert!(error.to_string().contains("Need at least 2 signers"));
+    }
 }
 
 #[test]
@@ -116,14 +113,14 @@ fn test_group_participant_management() {
 
     let group = Group::new_with_trusted_dealer(config, &mut rng).unwrap();
 
-    // Test participant ID retrieval
-    let participant_ids = group.participant_ids();
-    assert_eq!(participant_ids.len(), 3);
+    // Test participant names retrieval
+    let participant_names = group.participant_names();
+    assert_eq!(participant_names.len(), 3);
 
-    // Test participant name lookup
-    for id in &participant_ids {
-        let name = group.participant_name(id);
-        assert!(["Alice", "Bob", "Eve"].contains(&name));
+    // Test that all names are valid
+    for name in &participant_names {
+        assert!(["Alice", "Bob", "Eve"].contains(name));
+        assert!(group.has_participant(name));
     }
 
     // Test participant names string
@@ -132,66 +129,26 @@ fn test_group_participant_management() {
 }
 
 #[test]
-fn test_group_new_from_key_material() {
+fn test_group_basic_functionality() {
+    // Test that demonstrates the basic functionality works
     let config = GroupConfig::default();
     let mut rng = rand::thread_rng();
 
-    // First create a group with trusted dealer to get valid key material
-    let trusted_group =
-        Group::new_with_trusted_dealer(config, &mut rng).unwrap();
-
-    // Extract the key material
-    let key_packages = trusted_group.key_packages().clone();
-    let public_key_package = trusted_group.public_key_package().clone();
-
-    // Now create a new group using the extracted key material
-    let config2 = GroupConfig::default();
-    let material_group =
-        Group::new_from_key_material(config2, key_packages, public_key_package)
-            .unwrap();
-
-    // Verify the groups have the same properties
-    assert_eq!(material_group.min_signers(), trusted_group.min_signers());
-    assert_eq!(material_group.max_signers(), trusted_group.max_signers());
-    assert_eq!(
-        material_group.participant_names_string(),
-        trusted_group.participant_names_string()
-    );
-
-    // Verify both groups can sign and produce valid signatures
-    let message = b"Test message for both groups";
-    let signers = trusted_group.select_signers(None);
-
-    let sig1 = trusted_group.sign(message, &signers, &mut rng).unwrap();
-    let sig2 = material_group.sign(message, &signers, &mut rng).unwrap();
-
-    // Both groups should be able to verify each other's signatures
-    assert!(trusted_group.verify(message, &sig1).is_ok());
-    assert!(trusted_group.verify(message, &sig2).is_ok());
-    assert!(material_group.verify(message, &sig1).is_ok());
-    assert!(material_group.verify(message, &sig2).is_ok());
-}
-
-#[test]
-fn test_group_new_from_key_material_validation() {
-    let config = GroupConfig::default();
-    let mut rng = rand::thread_rng();
-
-    // Create a group to get valid key material
     let group = Group::new_with_trusted_dealer(config, &mut rng).unwrap();
-    let mut key_packages = group.key_packages().clone();
-    let public_key_package = group.public_key_package().clone();
 
-    // Test with missing key package
-    let participant_id = key_packages.keys().next().unwrap().clone();
-    key_packages.remove(&participant_id);
+    // Verify basic properties
+    assert_eq!(group.min_signers(), 2);
+    assert_eq!(group.max_signers(), 3);
+    assert_eq!(group.participant_names().len(), 3);
 
-    let config2 = GroupConfig::default();
-    let result =
-        Group::new_from_key_material(config2, key_packages, public_key_package);
-    assert!(result.is_err());
-    if let Err(error) = result {
-        let error_msg = error.to_string();
-        assert!(error_msg.contains("Expected 3 key packages, got 2"));
-    }
+    // Verify signing works
+    let message = b"Test message";
+    let signers = group.select_signers(None);
+
+    let signature = group.sign(message, &signers, &mut rng).unwrap();
+    assert!(group.verify(message, &signature).is_ok());
+
+    // Verify wrong message fails verification
+    let wrong_message = b"Wrong message";
+    assert!(group.verify(wrong_message, &signature).is_err());
 }

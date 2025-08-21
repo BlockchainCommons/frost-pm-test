@@ -118,9 +118,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🔧 STEP 2: Participant Verification");
     println!("   Verifying key packages for all participants...");
 
-    for participant_id in group.participant_ids() {
-        let participant_name = group.participant_name(&participant_id);
-        if group.key_package(&participant_id).is_some() {
+    for participant_name in group.participant_names() {
+        if group.key_package(participant_name).is_ok() {
             println!("   ✅ {} has valid key package", participant_name);
         }
     }
@@ -142,8 +141,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Select signers (in this case, the first min_signers participants)
     let signers = group.select_signers(None);
 
-    for (i, signer_id) in signers.iter().enumerate() {
-        let participant_name = group.participant_name(signer_id);
+    for (i, participant_name) in signers.iter().enumerate() {
         println!("   👤 Signer {}: {}", i + 1, participant_name);
     }
     println!();
@@ -197,9 +195,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Validate all the key properties of our FROST ceremony
     assert_eq!(
-        group.key_packages().len(),
+        group.participant_names().len(),
         group.max_signers() as usize,
-        "Should have correct number of key packages"
+        "Should have correct number of participants"
     );
     assert_eq!(
         signers.len(),

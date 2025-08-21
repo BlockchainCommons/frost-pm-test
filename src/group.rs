@@ -28,6 +28,25 @@ pub struct Group {
 }
 
 impl Group {
+    /// Convert participant name to identifier (private helper)
+    fn name_to_id(&self, name: &str) -> Result<Identifier, Box<dyn std::error::Error>> {
+        self.participants.get(name)
+            .cloned()
+            .ok_or_else(|| format!("Unknown participant: {}", name).into())
+    }
+
+    /// Convert multiple participant names to identifiers (private helper)
+    fn names_to_ids(&self, names: &[&str]) -> Result<Vec<Identifier>, Box<dyn std::error::Error>> {
+        names.iter()
+            .map(|name| self.name_to_id(name))
+            .collect()
+    }
+
+    /// Get participant name by identifier (private helper)
+    fn id_to_name(&self, id: &Identifier) -> &'static str {
+        self.id_to_name.get(id).unwrap_or(&"Unknown")
+    }
+
     /// Create a new Group using trusted dealer key generation
     pub fn new_with_trusted_dealer(
         config: GroupConfig,
@@ -101,9 +120,9 @@ impl Group {
         self.max_signers
     }
 
-    /// Get participant name by identifier
-    pub fn participant_name(&self, id: &Identifier) -> &'static str {
-        self.id_to_name.get(id).unwrap_or(&"Unknown")
+    /// Check if a participant name exists in this group
+    pub fn has_participant(&self, name: &str) -> bool {
+        self.participants.contains_key(name)
     }
 
     /// Get participant names as a comma-separated string
@@ -115,19 +134,16 @@ impl Group {
             .join(", ")
     }
 
-    /// Get the list of all participant identifiers
-    pub fn participant_ids(&self) -> Vec<Identifier> {
-        self.participants.values().cloned().collect()
+    /// Get the list of all participant names
+    pub fn participant_names(&self) -> Vec<&'static str> {
+        self.participants.keys().cloned().collect()
     }
 
-    /// Get a reference to a participant's key package
-    pub fn key_package(&self, id: &Identifier) -> Option<&KeyPackage> {
-        self.key_packages.get(id)
-    }
-
-    /// Get all key packages
-    pub fn key_packages(&self) -> &BTreeMap<Identifier, KeyPackage> {
-        &self.key_packages
+    /// Get a reference to a participant's key package by name
+    pub fn key_package(&self, name: &str) -> Result<&KeyPackage, Box<dyn std::error::Error>> {
+        let id = self.name_to_id(name)?;
+        self.key_packages.get(&id)
+            .ok_or_else(|| format!("No key package for participant {}", name).into())
     }
 
     /// Get the public key package for this group
@@ -141,30 +157,35 @@ impl Group {
     }
 
     /// Select a subset of participants for signing (up to min_signers)
-    pub fn select_signers(&self, count: Option<usize>) -> Vec<Identifier> {
+    /// Returns participant names instead of identifiers
+    pub fn select_signers(&self, count: Option<usize>) -> Vec<&'static str> {
         let signer_count = count.unwrap_or(self.min_signers as usize);
         self.key_packages
             .keys()
             .take(signer_count.min(self.max_signers as usize))
-            .cloned()
+            .map(|id| self.id_to_name(id))
             .collect()
     }
 
     /// Perform a complete signing ceremony with the specified signers and message
+    /// Takes participant names instead of identifiers
     pub fn sign(
         &self,
         message: &[u8],
-        signers: &[Identifier],
+        signer_names: &[&str],
         rng: &mut (impl RngCore + CryptoRng),
     ) -> Result<Signature, Box<dyn std::error::Error>> {
-        if signers.len() < self.min_signers as usize {
+        if signer_names.len() < self.min_signers as usize {
             return Err(format!(
                 "Need at least {} signers, got {}",
                 self.min_signers,
-                signers.len()
+                signer_names.len()
             )
             .into());
         }
+
+        // Convert names to identifiers
+        let signers = self.names_to_ids(signer_names)?;
 
         // Round 1: Generate nonces and commitments
         let mut nonces_map: BTreeMap<Identifier, SigningNonces> =
@@ -172,12 +193,12 @@ impl Group {
         let mut commitments_map: BTreeMap<Identifier, SigningCommitments> =
             BTreeMap::new();
 
-        for signer_id in signers {
+        for signer_id in &signers {
             let key_package =
                 self.key_packages.get(signer_id).ok_or_else(|| {
                     format!(
                         "No key package for signer {}",
-                        self.participant_name(signer_id)
+                        self.id_to_name(signer_id)
                     )
                 })?;
 
@@ -193,7 +214,7 @@ impl Group {
         // Round 2: Generate signature shares
         let mut signature_shares: BTreeMap<Identifier, SignatureShare> =
             BTreeMap::new();
-        for signer_id in signers {
+        for signer_id in &signers {
             let nonces = &nonces_map[signer_id];
             let key_package = &self.key_packages[signer_id];
 

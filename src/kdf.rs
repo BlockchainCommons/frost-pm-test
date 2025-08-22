@@ -38,20 +38,19 @@ pub fn hkdf_next(
 pub fn commitments_root(
     commitments: &BTreeMap<Identifier, SigningCommitments>,
 ) -> [u8; 32] {
-    let mut buf = Vec::with_capacity(commitments.len() * (2 * 32 + 2));
+    let mut buf = Vec::with_capacity(commitments.len() * 100);
 
     for (id, sc) in commitments {
-        // Get canonical bytes for identifier and commitments
-        // frost-ed25519 provides serialization support via serde
+        // Get canonical bytes for identifier and commitments using serde+bincode
         let id_bytes = bincode::serialize(id).expect("serialize identifier");
-        let hiding_bytes = bincode::serialize(sc.hiding())
-            .expect("serialize hiding commitment");
-        let binding_bytes = bincode::serialize(sc.binding())
-            .expect("serialize binding commitment");
+        let sc_bytes =
+            bincode::serialize(sc).expect("serialize signing commitments");
 
+        // Add length prefixes for deterministic parsing
+        buf.extend_from_slice(&(id_bytes.len() as u16).to_be_bytes());
         buf.extend_from_slice(&id_bytes);
-        buf.extend_from_slice(&hiding_bytes);
-        buf.extend_from_slice(&binding_bytes);
+        buf.extend_from_slice(&(sc_bytes.len() as u16).to_be_bytes());
+        buf.extend_from_slice(&sc_bytes);
     }
 
     sha256(&buf)

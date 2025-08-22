@@ -54,15 +54,14 @@ pub fn run_demo() -> Result<()> {
 
     // Stateless approach: 1) Precommit for NEXT mark — Round‑1 only.
     // This computes and CONSUMES nextKey_0 to finalize the PREVIOUS mark (0) internally
-    chain.precommit_next_mark(&["bob", "charlie"], 1)?;
+    let _receipt1 = chain.precommit_next_mark(&["bob", "charlie"], 1)?;
 
-    // 2) Append this mark — replay Round‑1 for seq=1, run Round‑2 for seq=1,
-    // recompute key_1 from Root_1, and internally do precommit for seq=2
+    // 2) Append this mark — use the SAME commitments from precommit, run Round‑2 for seq=1
     let mark1 = chain.append_mark_stateless(
         &["bob", "charlie"],
+        1,
         Utc::now(),
         &obj_hash2,
-        1,
     )?;
 
     println!("   Signers: Bob, Charlie");
@@ -79,12 +78,12 @@ pub fn run_demo() -> Result<()> {
     println!("   Object hash: {}", hex::encode(&obj_hash3));
 
     // Stateless approach continues: precommit for mark 2, then append mark 2
-    chain.precommit_next_mark(&["alice", "charlie"], 2)?;
+    let _receipt2 = chain.precommit_next_mark(&["alice", "charlie"], 2)?;
     let mark2 = chain.append_mark_stateless(
         &["alice", "charlie"],
+        2,
         Utc::now(),
         &obj_hash3,
-        2,
     )?;
 
     println!("   Signers: Alice, Charlie");

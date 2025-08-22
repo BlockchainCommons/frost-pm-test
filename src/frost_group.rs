@@ -8,12 +8,12 @@ use frost_ed25519::{
 use rand::{CryptoRng, RngCore};
 use std::collections::BTreeMap;
 
-use crate::frost_group_config::FROSTGroupConfig;
+use crate::frost_group_config::FrostGroupConfig;
 
 /// A fully constituted FROST group with all key material needed for signing
 /// This type abstracts away whether keys were generated via trusted dealer or DKG
 #[derive(Debug)]
-pub struct FROSTGroup {
+pub struct FrostGroup {
     /// Minimum number of signers required (threshold)
     min_signers: u16,
     /// Maximum number of participants
@@ -26,10 +26,10 @@ pub struct FROSTGroup {
     public_key_package: PublicKeyPackage,
 }
 
-impl FROSTGroup {
+impl FrostGroup {
     /// Create a new FROSTGroup using trusted dealer key generation
     pub fn new_with_trusted_dealer(
-        config: FROSTGroupConfig,
+        config: FrostGroupConfig,
         rng: &mut (impl RngCore + CryptoRng),
     ) -> Result<Self, Box<dyn std::error::Error>> {
         // Generate secret shares using trusted dealer
@@ -55,7 +55,7 @@ impl FROSTGroup {
 
     /// Create a new FROSTGroup from existing key material (e.g., from DKG)
     pub fn new_from_key_material(
-        config: FROSTGroupConfig,
+        config: FrostGroupConfig,
         key_packages: BTreeMap<Identifier, KeyPackage>,
         public_key_package: PublicKeyPackage,
     ) -> Result<Self, Box<dyn std::error::Error>> {
@@ -211,7 +211,13 @@ impl FROSTGroup {
         &self,
         signer_names: &[&str],
         rng: &mut (impl RngCore + CryptoRng),
-    ) -> Result<(BTreeMap<Identifier, SigningCommitments>, BTreeMap<String, SigningNonces>), Box<dyn std::error::Error>> {
+    ) -> Result<
+        (
+            BTreeMap<Identifier, SigningCommitments>,
+            BTreeMap<String, SigningNonces>,
+        ),
+        Box<dyn std::error::Error>,
+    > {
         if signer_names.len() < self.min_signers as usize {
             return Err(format!(
                 "Need at least {} signers, got {}",
@@ -226,11 +232,13 @@ impl FROSTGroup {
             self.key_package(signer_name)?; // This validates the name exists
         }
 
-        let mut commitments_map: BTreeMap<Identifier, SigningCommitments> = BTreeMap::new();
+        let mut commitments_map: BTreeMap<Identifier, SigningCommitments> =
+            BTreeMap::new();
         let mut nonces_map: BTreeMap<String, SigningNonces> = BTreeMap::new();
 
         for &signer_name in signer_names {
-            let (nonces, commitments) = self.commit_for_participant(signer_name, rng)?;
+            let (nonces, commitments) =
+                self.commit_for_participant(signer_name, rng)?;
             let signer_id = self.name_to_id(signer_name)?;
             commitments_map.insert(signer_id, commitments);
             nonces_map.insert(signer_name.to_string(), nonces);
@@ -258,14 +266,20 @@ impl FROSTGroup {
         }
 
         // Create signing package from the commitments
-        let signing_package = SigningPackage::new(commitments_map.clone(), message);
+        let signing_package =
+            SigningPackage::new(commitments_map.clone(), message);
 
         // Round 2: Generate signature shares
-        let mut signature_shares: BTreeMap<Identifier, SignatureShare> = BTreeMap::new();
+        let mut signature_shares: BTreeMap<Identifier, SignatureShare> =
+            BTreeMap::new();
         for &signer_name in signer_names {
             let signer_id = self.name_to_id(signer_name)?;
             let nonces = &nonces_map[signer_name];
-            let signature_share = self.sign_for_participant(signer_name, &signing_package, nonces)?;
+            let signature_share = self.sign_for_participant(
+                signer_name,
+                &signing_package,
+                nonces,
+            )?;
             signature_shares.insert(signer_id, signature_share);
         }
 
@@ -280,7 +294,7 @@ impl FROSTGroup {
     }
 }
 
-impl FROSTGroup {
+impl FrostGroup {
     /// Convert participant name to identifier
     pub fn name_to_id(
         &self,

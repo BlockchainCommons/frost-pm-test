@@ -1,9 +1,10 @@
 use crate::{
-    FROSTGroup,
-    kdf::{commitments_root, hkdf_next, kdf_next, link_len},
-    message::{DS_KDF_K0, genesis_message, hash_message},
+    FrostGroup,
+    kdf::{commitments_root, kdf_next},
+    message::{genesis_message, hash_message},
 };
 use anyhow::{Result, bail};
+use bc_crypto::hkdf_hmac_sha256;
 use chrono::{DateTime, Utc};
 use frost_ed25519::{
     Identifier, round1::SigningCommitments, round1::SigningNonces,
@@ -16,7 +17,7 @@ use std::collections::BTreeMap;
 /// Contains the commitment root and roster used in the session
 #[derive(Clone, Debug)]
 pub struct PrecommitReceipt {
-    pub seq: u32,
+    pub seq: usize,
     pub root: [u8; 32],
     pub ids: Vec<Identifier>,
     pub commitments: BTreeMap<Identifier, SigningCommitments>,
@@ -45,13 +46,13 @@ pub fn prev_commitment_matches(
 pub struct ChainMeta {
     pub res: ProvenanceMarkResolution,
     pub id: Vec<u8>,   // == key_0
-    pub seq_next: u32, // next sequence to produce
+    pub seq_next: usize, // next sequence to produce
     pub last_date: DateTime<Utc>,
 }
 
 #[derive(Debug)]
 pub struct FrostPmChain<'g> {
-    pub group: &'g FROSTGroup,
+    pub group: &'g FrostGroup,
     pub meta: ChainMeta,
     // For demo purposes: temporarily store the current precommit receipt
     // In a real distributed system, participants would manage this locally
@@ -64,7 +65,7 @@ pub struct FrostPmChain<'g> {
 impl<'g> FrostPmChain<'g> {
     // Create genesis: derive key_0, precommit seq=1, then finalize Mark 0.
     pub fn new_genesis(
-        group: &'g FROSTGroup,
+        group: &'g FrostGroup,
         res: ProvenanceMarkResolution,
         genesis_signers: &[&str],
         date0: DateTime<Utc>,
@@ -73,7 +74,7 @@ impl<'g> FrostPmChain<'g> {
         if genesis_signers.len() < group.min_signers() as usize {
             bail!("insufficient signers");
         }
-        let ll = link_len(res);
+        let ll = res.link_length();
 
         // 1. Derive key_0 (and thus id) with a one-time genesis signing
         // Build M0 from public group data
@@ -90,7 +91,7 @@ impl<'g> FrostPmChain<'g> {
             group.sign(&m0, genesis_signers, &mut OsRng).map_err(|e| {
                 anyhow::anyhow!("Failed to sign genesis message: {}", e)
             })?;
-        let key0 = hkdf_next(ll, &sig0.serialize()?, &m0, DS_KDF_K0);
+        let key0 = hkdf_hmac_sha256(&sig0.serialize()?, &m0, ll);
 
         // id == key0 (genesis invariant)
         let id = key0.clone();
@@ -140,7 +141,7 @@ impl<'g> FrostPmChain<'g> {
     pub fn precommit_next_mark(
         &mut self,
         participants: &[&str],
-        seq_next: u32,
+        seq_next: usize,
     ) -> Result<PrecommitReceipt> {
         if participants.len() < self.group.min_signers() as usize {
             bail!("insufficient signers for precommit");
@@ -188,7 +189,7 @@ impl<'g> FrostPmChain<'g> {
     pub fn append_mark(
         &mut self,
         participants: &[&str],
-        seq: u32,
+        seq: usize,
         date: DateTime<Utc>,
         obj_hash: &[u8],
     ) -> Result<ProvenanceMark> {
@@ -262,7 +263,7 @@ impl<'g> FrostPmChain<'g> {
             key_seq,
             next_key_seq,
             self.meta.id.clone(),
-            seq,
+            seq as u32,
             pm_date,
             None::<String>,
         )?;

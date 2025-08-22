@@ -2,7 +2,7 @@ use frost_ed25519::Identifier;
 use std::collections::BTreeMap;
 
 /// Configuration for the FROST group parameters
-pub struct FROSTGroupConfig {
+pub struct FrostGroupConfig {
     /// Minimum number of signers required (threshold)
     min_signers: u16,
     /// Maximum number of participants
@@ -13,7 +13,7 @@ pub struct FROSTGroupConfig {
     id_to_name: BTreeMap<Identifier, &'static str>,
 }
 
-impl FROSTGroupConfig {
+impl FrostGroupConfig {
     /// Create a new FROSTGroupConfig with the specified threshold and participant names
     /// The maximum number of signers is automatically derived from the participant names array
     pub fn new(
@@ -81,7 +81,7 @@ impl FROSTGroupConfig {
     }
 }
 
-impl Default for FROSTGroupConfig {
+impl Default for FrostGroupConfig {
     fn default() -> Self {
         Self::new(2, &["Alice", "Bob", "Eve"])
             .expect("Default FROSTGroupConfig should be valid")

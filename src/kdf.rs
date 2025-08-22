@@ -1,37 +1,7 @@
+use bc_crypto::sha256;
 use frost_ed25519::{Identifier, round1::SigningCommitments};
-use hkdf::Hkdf;
 use provenance_mark::ProvenanceMarkResolution;
-use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
-
-pub fn link_len(res: ProvenanceMarkResolution) -> usize {
-    match res {
-        ProvenanceMarkResolution::Low => 4,
-        ProvenanceMarkResolution::Medium => 8,
-        ProvenanceMarkResolution::Quartile => 16,
-        ProvenanceMarkResolution::High => 32,
-    }
-}
-
-pub fn sha256(data: &[u8]) -> [u8; 32] {
-    let mut h = Sha256::new();
-    h.update(data);
-    h.finalize().into()
-}
-
-// Derive exactly `len` bytes from a FROST signature serialization and message salt.
-pub fn hkdf_next(
-    len: usize,
-    sig_bytes: &[u8],
-    salt_msg: &[u8],
-    info: &[u8],
-) -> Vec<u8> {
-    let salt = sha256(salt_msg);
-    let hk = Hkdf::<Sha256>::new(Some(&salt), sig_bytes);
-    let mut out = vec![0u8; len];
-    hk.expand(info, &mut out).expect("HKDF expand");
-    out
-}
 
 /// Compute a deterministic root over Round-1 commitment map
 /// This provides deterministic key derivation from commitment sets
@@ -61,7 +31,7 @@ pub fn commitments_root(
 /// Returns the correct length for the given resolution
 pub fn kdf_next(
     chain_id: &[u8],
-    seq: u32,
+    seq: usize,
     root: [u8; 32],
     res: ProvenanceMarkResolution,
 ) -> Vec<u8> {
@@ -71,14 +41,14 @@ pub fn kdf_next(
     msg.extend_from_slice(&root);
     let hash = sha256(&msg);
     // Truncate to the appropriate length for this resolution
-    let len = link_len(res);
+    let len = res.link_length();
     hash[..len].to_vec()
 }
 
 pub fn derive_link_from_root(
     res: ProvenanceMarkResolution,
     chain_id: &[u8],
-    seq: u32,
+    seq: usize,
     root: [u8; 32],
 ) -> Vec<u8> {
     kdf_next(chain_id, seq, root, res)

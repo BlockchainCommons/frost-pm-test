@@ -1,38 +1,42 @@
 use anyhow::Result;
+use bc_crypto::sha256;
 use chrono::Utc;
 use frost_pm_test::{
-    FROSTGroup, FROSTGroupConfig, kdf::sha256, pm_chain::FrostPmChain,
+    FrostGroup, FrostGroupConfig, pm_chain::FrostPmChain,
 };
 use provenance_mark::ProvenanceMarkResolution;
 use rand::rngs::OsRng;
+
+const MARK_COUNT: usize = 100;
 
 pub fn run_demo() -> Result<()> {
     println!("🔒 FROST-Controlled Provenance Mark Chain Demo");
     println!("===============================================");
     println!(
-        "Demonstrating 100-mark chains across all supported resolutions\n"
+        "Demonstrating {}-mark chains across all supported resolutions\n",
+        MARK_COUNT
     );
 
     // Create a 2-of-3 FROST group
     println!("1. Creating FROST group with participants: Alice, Bob, Charlie");
     println!("   Threshold: 2 of 3 signers required");
-    let config = FROSTGroupConfig::new(2, &["alice", "bob", "charlie"])
+    let config = FrostGroupConfig::new(2, &["alice", "bob", "charlie"])
         .map_err(|e| anyhow::anyhow!("Failed to create FROST config: {}", e))?;
-    let group = FROSTGroup::new_with_trusted_dealer(config, &mut OsRng)
+    let group = FrostGroup::new_with_trusted_dealer(config, &mut OsRng)
         .map_err(|e| anyhow::anyhow!("Failed to create FROST group: {}", e))?;
     println!("   ✓ FROST group created successfully\n");
 
     let resolutions = [
-        (ProvenanceMarkResolution::Low, "Low", 4, "🔵"),
-        (ProvenanceMarkResolution::Medium, "Medium", 8, "🟡"),
-        (ProvenanceMarkResolution::Quartile, "Quartile", 16, "🟠"),
-        (ProvenanceMarkResolution::High, "High", 32, "🔴"),
+        (ProvenanceMarkResolution::Low, "Low", "🔵"),
+        (ProvenanceMarkResolution::Medium, "Medium", "🟡"),
+        (ProvenanceMarkResolution::Quartile, "Quartile", "🟠"),
+        (ProvenanceMarkResolution::High, "High", "🔴"),
     ];
 
-    for (i, (res, name, link_len, icon)) in resolutions.iter().enumerate() {
+    for (i, (res, name, icon)) in resolutions.iter().enumerate() {
         println!(
-            "{}═══ {} Resolution Demo - 100 Mark Chain ({} bytes) ═══",
-            icon, name, link_len
+            "{} ═══ {} Resolution Demo - {} Mark Chain ({} bytes) ═══",
+            icon, name, MARK_COUNT, res.link_length()
         );
 
         // Genesis data
@@ -62,9 +66,8 @@ pub fn run_demo() -> Result<()> {
         // Store all marks for final validation
         let mut all_marks = vec![genesis_mark];
 
-        // Generate 99 additional marks (for 100 total)
         print!("   Creating marks: ");
-        for seq in 1..100 {
+        for seq in 1..MARK_COUNT {
             // Vary the content for each mark
             let content = format!("Edition #{} of collection #{}", seq, i + 1);
             let obj_hash = sha256(content.as_bytes());
@@ -170,36 +173,6 @@ pub fn run_demo() -> Result<()> {
     }
 
     println!("🎉 100-Mark Chain Demo Complete!");
-    println!("==================================");
-    println!(
-        "✅ Successfully demonstrated FROST-controlled provenance mark chains"
-    );
-    println!("   across all four supported resolutions with 100 marks each:");
-    println!("   🔵 Low (4 bytes)      - 100 marks, compact for IoT/embedded");
-    println!(
-        "   🟡 Medium (8 bytes)   - 100 marks, balanced for most applications"
-    );
-    println!(
-        "   🟠 Quartile (16 bytes) - 100 marks, higher security for sensitive content"
-    );
-    println!(
-        "   🔴 High (32 bytes)    - 100 marks, maximum security for critical assets"
-    );
-    println!("\n📊 Performance Statistics:");
-    println!("   • Total marks generated: 400 (4 resolutions × 100 marks)");
-    println!("   • Total FROST signatures: 400 (one per mark)");
-    println!("   • Chain integrity: Verified across all 400 marks");
-    println!("\n🔐 Key Features Verified:");
-    println!("   • FROST threshold signatures scale to long chains");
-    println!(
-        "   • Chain integrity maintained across 100+ marks per resolution"
-    );
-    println!(
-        "   • Two-ceremony approach: precommit (Round-1) + append (Round-2)"
-    );
-    println!("   • Deterministic key derivation from commitment roots");
-    println!("   • No single party ever held master secrets");
-    println!("   • Performance suitable for real-world deployment");
 
     Ok(())
 }

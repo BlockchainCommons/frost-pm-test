@@ -1,21 +1,21 @@
-use frost_pm_test::{FROSTGroup, FROSTGroupConfig};
+use frost_pm_test::{FrostGroup, FrostGroupConfig};
 
 // Test helper functions
 pub fn corporate_board_config()
--> Result<FROSTGroupConfig, Box<dyn std::error::Error>> {
-    FROSTGroupConfig::new(3, &["CEO", "CFO", "CTO", "COO", "CLO"])
+-> Result<FrostGroupConfig, Box<dyn std::error::Error>> {
+    FrostGroupConfig::new(3, &["CEO", "CFO", "CTO", "COO", "CLO"])
 }
 
-pub fn family_config() -> Result<FROSTGroupConfig, Box<dyn std::error::Error>> {
-    FROSTGroupConfig::new(2, &["Alice", "Bob", "Charlie", "Diana"])
+pub fn family_config() -> Result<FrostGroupConfig, Box<dyn std::error::Error>> {
+    FrostGroupConfig::new(2, &["Alice", "Bob", "Charlie", "Diana"])
 }
 
 #[test]
 fn test_group_creation_with_trusted_dealer() {
-    let config = FROSTGroupConfig::default();
+    let config = FrostGroupConfig::default();
     let mut rng = rand::thread_rng();
 
-    let group = FROSTGroup::new_with_trusted_dealer(config, &mut rng).unwrap();
+    let group = FrostGroup::new_with_trusted_dealer(config, &mut rng).unwrap();
 
     assert_eq!(group.min_signers(), 2);
     assert_eq!(group.max_signers(), 3);
@@ -30,10 +30,10 @@ fn test_group_creation_with_trusted_dealer() {
 
 #[test]
 fn test_group_signing() {
-    let config = FROSTGroupConfig::default();
+    let config = FrostGroupConfig::default();
     let mut rng = rand::thread_rng();
 
-    let group = FROSTGroup::new_with_trusted_dealer(config, &mut rng).unwrap();
+    let group = FrostGroup::new_with_trusted_dealer(config, &mut rng).unwrap();
     let message = b"Test message for FROST signing";
 
     // Select signers
@@ -58,10 +58,10 @@ fn test_group_signing() {
 
 #[test]
 fn test_group_insufficient_signers() {
-    let config = FROSTGroupConfig::default();
+    let config = FrostGroupConfig::default();
     let mut rng = rand::thread_rng();
 
-    let group = FROSTGroup::new_with_trusted_dealer(config, &mut rng).unwrap();
+    let group = FrostGroup::new_with_trusted_dealer(config, &mut rng).unwrap();
     let message = b"Test message";
 
     // Try to sign with only 1 signer (need 2 for threshold)
@@ -79,7 +79,7 @@ fn test_corporate_board_signing() {
     let config = corporate_board_config().unwrap();
     let mut rng = rand::thread_rng();
 
-    let group = FROSTGroup::new_with_trusted_dealer(config, &mut rng).unwrap();
+    let group = FrostGroup::new_with_trusted_dealer(config, &mut rng).unwrap();
     assert_eq!(group.min_signers(), 3);
     assert_eq!(group.max_signers(), 5);
 
@@ -100,10 +100,10 @@ fn test_corporate_board_signing() {
 
 #[test]
 fn test_group_participant_management() {
-    let config = FROSTGroupConfig::default();
+    let config = FrostGroupConfig::default();
     let mut rng = rand::thread_rng();
 
-    let group = FROSTGroup::new_with_trusted_dealer(config, &mut rng).unwrap();
+    let group = FrostGroup::new_with_trusted_dealer(config, &mut rng).unwrap();
 
     // Test participant names retrieval
     let participant_names = group.participant_names();
@@ -123,10 +123,10 @@ fn test_group_participant_management() {
 #[test]
 fn test_group_basic_functionality() {
     // Test that demonstrates the basic functionality works
-    let config = FROSTGroupConfig::default();
+    let config = FrostGroupConfig::default();
     let mut rng = rand::thread_rng();
 
-    let group = FROSTGroup::new_with_trusted_dealer(config, &mut rng).unwrap();
+    let group = FrostGroup::new_with_trusted_dealer(config, &mut rng).unwrap();
 
     // Verify basic properties
     assert_eq!(group.min_signers(), 2);

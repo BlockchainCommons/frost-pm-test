@@ -1,18 +1,18 @@
 use frost_ed25519 as frost;
-use frost_pm_test::FROSTGroupConfig;
+use frost_pm_test::FrostGroupConfig;
 
 // Test helper functions
-fn corporate_board_config() -> Result<FROSTGroupConfig, Box<dyn std::error::Error>> {
-    FROSTGroupConfig::new(3, &["CEO", "CFO", "CTO", "COO", "CLO"])
+fn corporate_board_config() -> Result<FrostGroupConfig, Box<dyn std::error::Error>> {
+    FrostGroupConfig::new(3, &["CEO", "CFO", "CTO", "COO", "CLO"])
 }
 
-fn family_config() -> Result<FROSTGroupConfig, Box<dyn std::error::Error>> {
-    FROSTGroupConfig::new(2, &["Alice", "Bob", "Charlie", "Diana"])
+fn family_config() -> Result<FrostGroupConfig, Box<dyn std::error::Error>> {
+    FrostGroupConfig::new(2, &["Alice", "Bob", "Charlie", "Diana"])
 }
 
 #[test]
 fn test_default_config() {
-    let config = FROSTGroupConfig::default();
+    let config = FrostGroupConfig::default();
     assert_eq!(config.min_signers(), 2);
     assert_eq!(config.max_signers(), 3);
     assert_eq!(config.participant_ids().len(), 3);
@@ -53,15 +53,15 @@ fn test_family_config() {
 #[test]
 fn test_config_validation() {
     // Test min_signers = 0
-    let result = FROSTGroupConfig::new(0, &["Alice", "Bob"]);
+    let result = FrostGroupConfig::new(0, &["Alice", "Bob"]);
     assert!(result.is_err());
 
     // Test min_signers > max_signers
-    let result = FROSTGroupConfig::new(5, &["Alice", "Bob"]);
+    let result = FrostGroupConfig::new(5, &["Alice", "Bob"]);
     assert!(result.is_err());
 
     // Test valid config
-    let result = FROSTGroupConfig::new(2, &["Alice", "Bob", "Charlie"]);
+    let result = FrostGroupConfig::new(2, &["Alice", "Bob", "Charlie"]);
     assert!(result.is_ok());
     let config = result.unwrap();
     assert_eq!(config.min_signers(), 2);
@@ -70,7 +70,7 @@ fn test_config_validation() {
 
 #[test]
 fn test_participant_name_lookup() {
-    let config = FROSTGroupConfig::default();
+    let config = FrostGroupConfig::default();
     let participant_ids = config.participant_ids();
 
     // Test that we can look up participant names
@@ -87,7 +87,7 @@ fn test_participant_name_lookup() {
 
 #[test]
 fn test_participant_names_string() {
-    let config = FROSTGroupConfig::default();
+    let config = FrostGroupConfig::default();
     let names = config.participant_names_string();
     // BTreeMap maintains sorted order, so we can predict the output
     assert_eq!(names, "Alice, Bob, Eve");

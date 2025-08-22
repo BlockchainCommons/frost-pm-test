@@ -20,6 +20,6 @@ pub mod kdf;
 pub mod message;
 pub mod pm_chain;
 
-pub use frost_group::FROSTGroup;
-pub use frost_group_config::FROSTGroupConfig;
+pub use frost_group::FrostGroup;
+pub use frost_group_config::FrostGroupConfig;
 pub use pm_chain::{FrostPmChain, PrecommitReceipt};

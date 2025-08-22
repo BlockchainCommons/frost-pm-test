@@ -1,17 +1,16 @@
 use anyhow::Result;
+use bc_crypto::sha256;
 use chrono::Utc;
-use frost_pm_test::{
-    FROSTGroup, FROSTGroupConfig, kdf::sha256, pm_chain::FrostPmChain,
-};
+use frost_pm_test::{FrostGroup, FrostGroupConfig, pm_chain::FrostPmChain};
 use provenance_mark::ProvenanceMarkResolution;
 use rand::rngs::OsRng;
 
 #[test]
 fn frost_controls_pm_chain() -> Result<()> {
     // Build a 2-of-3 group with usernames ["alice","bob","charlie"]
-    let config = FROSTGroupConfig::new(2, &["alice", "bob", "charlie"])
+    let config = FrostGroupConfig::new(2, &["alice", "bob", "charlie"])
         .map_err(|e| anyhow::anyhow!("Failed to create FROST config: {}", e))?;
-    let group = FROSTGroup::new_with_trusted_dealer(config, &mut OsRng)
+    let group = FrostGroup::new_with_trusted_dealer(config, &mut OsRng)
         .map_err(|e| anyhow::anyhow!("Failed to create FROST group: {}", e))?;
     let res = ProvenanceMarkResolution::Quartile;
 
@@ -90,9 +89,9 @@ fn frost_controls_pm_chain() -> Result<()> {
 
 #[test]
 fn frost_pm_chain_insufficient_signers_fails() -> Result<()> {
-    let config = FROSTGroupConfig::new(2, &["alice", "bob", "charlie"])
+    let config = FrostGroupConfig::new(2, &["alice", "bob", "charlie"])
         .map_err(|e| anyhow::anyhow!("Failed to create FROST config: {}", e))?;
-    let group = FROSTGroup::new_with_trusted_dealer(config, &mut OsRng)
+    let group = FrostGroup::new_with_trusted_dealer(config, &mut OsRng)
         .map_err(|e| anyhow::anyhow!("Failed to create FROST group: {}", e))?;
     let res = ProvenanceMarkResolution::Medium;
     let image = b"test image";
@@ -120,9 +119,9 @@ fn frost_pm_chain_insufficient_signers_fails() -> Result<()> {
 
 #[test]
 fn frost_pm_chain_date_monotonicity() -> Result<()> {
-    let config = FROSTGroupConfig::new(2, &["alice", "bob", "charlie"])
+    let config = FrostGroupConfig::new(2, &["alice", "bob", "charlie"])
         .map_err(|e| anyhow::anyhow!("Failed to create FROST config: {}", e))?;
-    let group = FROSTGroup::new_with_trusted_dealer(config, &mut OsRng)
+    let group = FrostGroup::new_with_trusted_dealer(config, &mut OsRng)
         .map_err(|e| anyhow::anyhow!("Failed to create FROST group: {}", e))?;
     let res = ProvenanceMarkResolution::High;
     let image = b"genesis image";
@@ -163,9 +162,9 @@ fn frost_pm_chain_date_monotonicity() -> Result<()> {
 #[test]
 fn frost_pm_different_signer_combinations() -> Result<()> {
     // Test that different valid signer combinations work
-    let config = FROSTGroupConfig::new(3, &["alice", "bob", "charlie", "dave"])
+    let config = FrostGroupConfig::new(3, &["alice", "bob", "charlie", "dave"])
         .map_err(|e| anyhow::anyhow!("Failed to create FROST config: {}", e))?;
-    let group = FROSTGroup::new_with_trusted_dealer(config, &mut OsRng)
+    let group = FrostGroup::new_with_trusted_dealer(config, &mut OsRng)
         .map_err(|e| anyhow::anyhow!("Failed to create FROST group: {}", e))?;
     let res = ProvenanceMarkResolution::Low;
 
@@ -207,9 +206,9 @@ fn frost_pm_different_signer_combinations() -> Result<()> {
 
 #[test]
 fn frost_pm_all_resolutions() -> Result<()> {
-    let config = FROSTGroupConfig::new(2, &["alice", "bob", "charlie"])
+    let config = FrostGroupConfig::new(2, &["alice", "bob", "charlie"])
         .map_err(|e| anyhow::anyhow!("Failed to create FROST config: {}", e))?;
-    let group = FROSTGroup::new_with_trusted_dealer(config, &mut OsRng)
+    let group = FrostGroup::new_with_trusted_dealer(config, &mut OsRng)
         .map_err(|e| anyhow::anyhow!("Failed to create FROST group: {}", e))?;
 
     let resolutions = [
@@ -220,7 +219,10 @@ fn frost_pm_all_resolutions() -> Result<()> {
     ];
 
     for (res, name, expected_link_len) in resolutions {
-        println!("Testing {} resolution ({}-byte links)", name, expected_link_len);
+        println!(
+            "Testing {} resolution ({}-byte links)",
+            name, expected_link_len
+        );
 
         // Test data for this resolution
         let image1 = format!("genesis-{}", name).into_bytes();
@@ -245,7 +247,11 @@ fn frost_pm_all_resolutions() -> Result<()> {
         assert_eq!(mark0.res(), res);
         assert_eq!(mark0.key().len(), expected_link_len);
         assert_eq!(mark0.chain_id(), mark0.key()); // Genesis invariant
-        println!("  ✓ Genesis mark: {} ({})", mark0.identifier(), mark0.key().len());
+        println!(
+            "  ✓ Genesis mark: {} ({})",
+            mark0.identifier(),
+            mark0.key().len()
+        );
 
         // Second mark
         let mark1 = chain.append_mark(
@@ -260,7 +266,11 @@ fn frost_pm_all_resolutions() -> Result<()> {
         assert_eq!(mark1.res(), res);
         assert_eq!(mark1.key().len(), expected_link_len);
         assert_eq!(mark1.chain_id(), mark0.chain_id());
-        println!("  ✓ Second mark: {} ({})", mark1.identifier(), mark1.key().len());
+        println!(
+            "  ✓ Second mark: {} ({})",
+            mark1.identifier(),
+            mark1.key().len()
+        );
 
         // Third mark
         let mark2 = chain.append_mark(
@@ -275,7 +285,11 @@ fn frost_pm_all_resolutions() -> Result<()> {
         assert_eq!(mark2.res(), res);
         assert_eq!(mark2.key().len(), expected_link_len);
         assert_eq!(mark2.chain_id(), mark0.chain_id());
-        println!("  ✓ Third mark: {} ({})", mark2.identifier(), mark2.key().len());
+        println!(
+            "  ✓ Third mark: {} ({})",
+            mark2.identifier(),
+            mark2.key().len()
+        );
 
         // Verify complete chain integrity
         let marks = vec![mark0.clone(), mark1.clone(), mark2.clone()];

@@ -2,9 +2,9 @@ use chrono::{DateTime, Utc};
 use frost_ed25519::Identifier;
 use provenance_mark::ProvenanceMarkResolution;
 
-pub const DS_GENESIS: &[u8] = b"BC:ProvMark:FROST:v1:GENESIS\0";
-pub const DS_HASH: &[u8] = b"BC:ProvMark:FROST:v1:HASH\0";
-pub const DS_KDF_K0: &[u8] = b"BC:ProvMark:FROST:v1:KDF:key0\0";
+// Domain separation tags
+pub const DS_GENESIS: &[u8] = b"DS_GENESIS\0";
+pub const DS_HASH: &[u8] = b"DS_HASH\0";
 
 pub fn res_code(res: ProvenanceMarkResolution) -> u8 {
     match res {
@@ -39,7 +39,7 @@ pub fn genesis_message(
 
 pub fn hash_message(
     id: &[u8],
-    seq: u32,
+    seq: usize,
     date: DateTime<Utc>,
     obj_hash: &[u8],
 ) -> Vec<u8> {

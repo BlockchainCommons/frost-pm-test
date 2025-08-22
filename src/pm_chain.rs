@@ -5,8 +5,7 @@ use crate::{
 };
 use anyhow::{Result, bail};
 use bc_crypto::{hkdf_hmac_sha256, sha256};
-use chrono::{DateTime, Utc};
-use dcbor::CBOREncodable;
+use dcbor::{CBOREncodable, Date};
 use frost_ed25519::{
     Identifier, round1::SigningCommitments, round1::SigningNonces,
 };
@@ -42,37 +41,41 @@ pub fn prev_commitment_matches(
     Ok(mark.hash() == prev.hash())
 }
 
-// Holds public chain metadata for the demo
-#[derive(Clone, Debug)]
-pub struct ChainMeta {
-    pub res: ProvenanceMarkResolution,
-    pub id: Vec<u8>,     // == key_0
-    pub seq_next: usize, // next sequence to produce
-    pub last_date: DateTime<Utc>,
-}
-
 #[derive(Debug)]
 pub struct FrostPmChain<'g> {
-    pub group: &'g FrostGroup,
-    pub meta: ChainMeta,
+    group: &'g FrostGroup,
+    last_mark: ProvenanceMark,
     // For demo purposes: temporarily store the current precommit receipt
     // In a real distributed system, participants would manage this locally
     current_receipt: Option<PrecommitReceipt>,
     current_nonces: Option<BTreeMap<String, SigningNonces>>,
-    // Store the last mark for chain verification
-    last_mark: Option<ProvenanceMark>,
 }
 
 impl<'g> FrostPmChain<'g> {
+    /// Get the resolution from the last mark
+    fn res(&self) -> ProvenanceMarkResolution {
+        self.last_mark.res()
+    }
+
+    /// Get the chain ID from the last mark
+    fn chain_id(&self) -> &[u8] {
+        self.last_mark.chain_id()
+    }
+
+    /// Get the next sequence number for the chain
+    fn next_seq(&self) -> usize {
+        self.last_mark.seq() as usize + 1
+    }
+
     // Create genesis: derive key_0, precommit seq=1, then finalize Mark 0.
     pub fn new_genesis(
         group: &'g FrostGroup,
         res: ProvenanceMarkResolution,
-        genesis_signers: &[&str],
-        date0: DateTime<Utc>,
+        signers: &[&str],
+        date: Date,
         info: Option<impl CBOREncodable>,
     ) -> Result<(Self, ProvenanceMark)> {
-        if genesis_signers.len() < group.min_signers() as usize {
+        if signers.len() < group.min_signers() as usize {
             bail!("insufficient signers");
         }
         let ll = res.link_length();
@@ -88,47 +91,56 @@ impl<'g> FrostPmChain<'g> {
             genesis_message(res, group.min_signers(), group.max_signers(), ids);
 
         // FROST: derive key_0 using the group's built-in signing method
-        let sig0 = group.sign(&m0, genesis_signers, &mut OsRng)?;
-        let key0 = hkdf_hmac_sha256(&sig0.serialize()?, &m0, ll);
+        let sig_0 = group.sign(&m0, signers, &mut OsRng)?;
 
-        // id == key0 (genesis invariant)
-        let id = key0.clone();
+        // Verify signature
+        assert!(group.verify(&m0, &sig_0).is_ok());
+
+        let key_0 = hkdf_hmac_sha256(&sig_0.serialize()?, &m0, ll);
+
+        // id == key_0 (genesis invariant)
+        let id = key_0.clone();
 
         // 2. Precommit for seq=1 (Round-1 only)
         // Collect SigningCommitments for seq=1 from the chosen quorum
-        let mut chain = Self {
-            group,
-            meta: ChainMeta {
-                res,
-                id: id.clone(),
-                seq_next: 0,
-                last_date: date0,
-            },
-            current_receipt: None,
-            current_nonces: None,
-            last_mark: None,
-        };
+        // We need to create a temporary chain-like structure for this operation
+        let (commitments_map, nonces_map) =
+            group.round1_commit(signers, &mut OsRng)?;
 
-        let receipt1 = chain.precommit_next_mark(genesis_signers, 1)?;
+        // Compute Root_1 = commitments_root(&commitments_map)
+        let root_next = commitments_root(&commitments_map);
+
+        let receipt1 = PrecommitReceipt {
+            seq: 1,
+            root: root_next,
+            ids: signers
+                .iter()
+                .map(|name| group.name_to_id(name).expect("valid participant"))
+                .collect(),
+            commitments: commitments_map.clone(),
+        };
 
         // Compute nextKey_0 = derive_link_from_root(res, id, 1, Root_1)
         let next_key0 = kdf_next(&id, 1, receipt1.root, res);
 
         // 3. Finalize M⟨0⟩ with key_0 and this nextKey_0
-        let pm_date = dcbor::Date::from_timestamp(date0.timestamp() as f64);
         let mark0 = ProvenanceMark::new(
             res,
-            key0,
+            key_0,
             next_key0,
             id.clone(),
             0,
-            pm_date,
+            date.clone(),
             info,
         )?;
 
-        // Store the genesis mark and update the sequence
-        chain.last_mark = Some(mark0.clone());
-        chain.meta.seq_next = 1;
+        // 4. Create the chain with the genesis mark
+        let chain = Self {
+            group,
+            last_mark: mark0.clone(),
+            current_receipt: Some(receipt1),
+            current_nonces: Some(nonces_map),
+        };
 
         Ok((chain, mark0))
     }
@@ -136,36 +148,37 @@ impl<'g> FrostPmChain<'g> {
     /// Precommit for next mark (Round-1 only)
     /// Returns a PrecommitReceipt containing the root and commitments (public, non-secret)
     /// This computes and CONSUMES nextKey_j to finalize the PREVIOUS mark (j-1).
-    pub fn precommit_next_mark(
+    fn precommit_next_mark(
         &mut self,
-        participants: &[&str],
-        seq_next: usize,
+        signers: &[&str],
+        next_seq: usize,
+        chain_id: &[u8],
+        res: ProvenanceMarkResolution,
     ) -> Result<PrecommitReceipt> {
-        if participants.len() < self.group.min_signers() as usize {
+        if signers.len() < self.group.min_signers() as usize {
             bail!("insufficient signers for precommit");
         }
 
-        // 1. Collect commitments for seq_next
+        // 1. Collect commitments for next_seq
         // Each participant runs round1::commit and retains SigningNonces locally.
         let (commitments_map, nonces_map) =
-            self.group.round1_commit(participants, &mut OsRng)?;
+            self.group.round1_commit(signers, &mut OsRng)?;
 
-        // 2. Compute Root_{seq_next} = commitments_root(&commitments_map)
+        // 2. Compute Root_{next_seq} = commitments_root(&commitments_map)
         let root_next = commitments_root(&commitments_map);
 
-        // 3. Compute nextKey_{seq_next-1} = kdf_next(chain_id, seq_next, Root_next)
+        // 3. Compute nextKey_{next_seq-1} = kdf_next(chain_id, next_seq, Root_next)
         // and finalize the previous mark's hash using that nextKey
-        let _next_key =
-            kdf_next(&self.meta.id, seq_next, root_next, self.meta.res);
+        let _next_key = kdf_next(chain_id, next_seq, root_next, res);
 
         // 4. Create PrecommitReceipt (public, non-secret)
-        let ids: Vec<Identifier> = participants
+        let ids: Vec<Identifier> = signers
             .iter()
             .map(|name| self.group.name_to_id(name).expect("valid participant"))
             .collect();
 
         let receipt = PrecommitReceipt {
-            seq: seq_next,
+            seq: next_seq,
             root: root_next,
             ids,
             commitments: commitments_map,
@@ -182,24 +195,20 @@ impl<'g> FrostPmChain<'g> {
     /// This implements the two-ceremony approach: precommit (Round-1) + append (Round-2)
     pub fn append_mark(
         &mut self,
-        participants: &[&str],
-        seq: usize,
-        date: DateTime<Utc>,
+        signers: &[&str],
+        date: Date,
         info: Option<impl CBOREncodable>,
     ) -> Result<ProvenanceMark> {
-        if participants.len() < self.group.min_signers() as usize {
+        if signers.len() < self.group.min_signers() as usize {
             bail!("insufficient signers");
         }
-        if date < self.meta.last_date {
+
+        // Check date monotonicity against the last mark's date
+        if date < *self.last_mark.date() {
             bail!("date monotonicity violated");
         }
-        if seq != self.meta.seq_next {
-            bail!(
-                "sequence number mismatch: expected {}, got {}",
-                self.meta.seq_next,
-                seq
-            );
-        }
+
+        let seq = self.next_seq();
 
         // 1. Get the stored receipt and nonces from precommit phase
         let receipt = self.current_receipt.as_ref().ok_or_else(|| {
@@ -221,15 +230,13 @@ impl<'g> FrostPmChain<'g> {
         let commitments_map = &receipt.commitments;
 
         // 3. Derive key_seq from the receipt's root (which matches the commitments)
-        let key_seq = kdf_next(&self.meta.id, seq, receipt.root, self.meta.res);
+        let key_seq = kdf_next(self.chain_id(), seq, receipt.root, self.res());
 
         // 4. Verify that this key_seq matches what the previous mark committed to
-        if let Some(prev_mark) = &self.last_mark {
-            if !prev_commitment_matches(prev_mark, &key_seq)? {
-                bail!(
-                    "Chain integrity check failed: key_seq doesn't match previous mark's nextKey"
-                );
-            }
+        if !prev_commitment_matches(&self.last_mark, &key_seq)? {
+            bail!(
+                "Chain integrity check failed: key_seq doesn't match previous mark's nextKey"
+            );
         }
 
         // 5. Build message for Round-2 signing (standard PM message format)
@@ -241,39 +248,49 @@ impl<'g> FrostPmChain<'g> {
             Vec::new()
         };
         let obj_hash = sha256(&info_bytes);
-        let message = hash_message(&self.meta.id, seq, date, &obj_hash);
+        let message =
+            hash_message(self.chain_id(), seq, date.clone(), &obj_hash);
 
         // 6. Perform Round-2 using the SAME commitments and stored nonces
-        let _signature = self.group.round2_sign(
-            participants,
+        let signature = self.group.round2_sign(
+            signers,
             commitments_map,
             stored_nonces,
             &message,
         )?;
 
-        // 7. BEFORE finalizing this mark's hash, run precommit for seq+1 to get nextKey_seq
-        let next_receipt = self.precommit_next_mark(participants, seq + 1)?;
-        let next_key_seq =
-            kdf_next(&self.meta.id, seq + 1, next_receipt.root, self.meta.res);
+        // 7. VERIFY the aggregate signature under the group verifying key
+        self.group
+            .public_key_package()
+            .verifying_key()
+            .verify(&message, &signature)
+            .map_err(|_| {
+                anyhow::anyhow!("FROST aggregate signature verification failed")
+            })?;
 
-        // 8. Convert chrono::DateTime to dcbor::Date for ProvenanceMark
+        // 8. BEFORE finalizing this mark's hash, run precommit for seq+1 to get nextKey_seq
+        let chain_id = self.chain_id().to_vec();
+        let res = self.res();
+        let next_receipt =
+            self.precommit_next_mark(signers, seq + 1, &chain_id, res)?;
+        let next_key_seq = kdf_next(&chain_id, seq + 1, next_receipt.root, res);
+
+        // 9. Convert chrono::DateTime to dcbor::Date for ProvenanceMark
         let pm_date = dcbor::Date::from_timestamp(date.timestamp() as f64);
 
-        // 9. Use key_seq and next_key_seq to create the mark
+        // 10. Use key_seq and next_key_seq to create the mark
         let mark = ProvenanceMark::new(
-            self.meta.res,
+            res,
             key_seq,
             next_key_seq,
-            self.meta.id.clone(),
+            chain_id,
             seq as u32,
             pm_date,
             info,
         )?;
 
-        // 10. Update state and store the new mark for future verification
-        self.last_mark = Some(mark.clone());
-        self.meta.seq_next = seq + 1;
-        self.meta.last_date = date;
+        // 11. Update state and store the new mark for future verification
+        self.last_mark = mark.clone();
 
         Ok(mark)
     }

@@ -1,5 +1,5 @@
 use anyhow::Result;
-use chrono::Utc;
+use dcbor::Date;
 use frost_pm_test::{FrostGroup, FrostGroupConfig, pm_chain::FrostPmChain};
 use provenance_mark::ProvenanceMarkResolution;
 use rand::rngs::OsRng;
@@ -19,7 +19,7 @@ fn frost_controls_pm_chain() -> Result<()> {
         &group,
         res,
         &["alice", "bob"],
-        Utc::now(),
+        Date::now(),
         Some(image_content),
     )?;
 
@@ -31,8 +31,7 @@ fn frost_controls_pm_chain() -> Result<()> {
 
     let mark1 = chain.append_mark(
         &["alice", "bob"], // Use same participants as genesis precommit
-        1,
-        Utc::now(),
+        Date::now(),
         Some(image2_content),
     )?;
 
@@ -43,8 +42,7 @@ fn frost_controls_pm_chain() -> Result<()> {
 
     let mark2 = chain.append_mark(
         &["alice", "bob"], // Use same participants as mark1 precommit
-        2,
-        Utc::now(),
+        Date::now(),
         Some(image3_content),
     )?;
 
@@ -92,7 +90,7 @@ fn frost_pm_chain_insufficient_signers_fails() -> Result<()> {
         &group,
         res,
         &["alice"], // Only 1 signer, but threshold is 2
-        Utc::now(),
+        Date::now(),
         Some("test content"),
     );
 
@@ -113,20 +111,19 @@ fn frost_pm_chain_date_monotonicity() -> Result<()> {
     let group = FrostGroup::new_with_trusted_dealer(config, &mut OsRng)?;
     let res = ProvenanceMarkResolution::High;
 
-    let genesis_time = Utc::now();
+    let genesis_time = Date::now();
     let (mut chain, _mark0) = FrostPmChain::new_genesis(
         &group,
         res,
         &["alice", "bob"],
-        genesis_time,
+        genesis_time.clone(),
         Some("test content"),
     )?;
 
     // Try to create a mark with earlier date than genesis (should fail)
-    let earlier_time = genesis_time - chrono::Duration::seconds(60);
+    let earlier_time = Date::from_datetime(genesis_time.datetime() - chrono::Duration::seconds(60));
     let result = chain.append_mark(
         &["alice", "bob"], // Use same participants as genesis precommit
-        1,
         earlier_time,
         Some("test content 2"),
     );
@@ -154,15 +151,14 @@ fn frost_pm_different_signer_combinations() -> Result<()> {
         &group,
         res,
         &["alice", "bob", "charlie"],
-        Utc::now(),
+        Date::now(),
         Some("test content 1"),
     )?;
 
     // Next mark with same participants as genesis precommit
     let mark1 = chain.append_mark(
         &["alice", "bob", "charlie"], // Use same participants as genesis precommit
-        1,
-        Utc::now(),
+        Date::now(),
         Some("test content 2"),
     )?;
 
@@ -204,7 +200,7 @@ fn frost_pm_all_resolutions() -> Result<()> {
             &group,
             res,
             &["alice", "bob"],
-            Utc::now(),
+            Date::now(),
             Some("test content 1"),
         )?;
 
@@ -222,8 +218,7 @@ fn frost_pm_all_resolutions() -> Result<()> {
         // Second mark
         let mark1 = chain.append_mark(
             &["alice", "bob"], // Same participants as genesis precommit
-            1,
-            Utc::now(),
+            Date::now(),
             Some("test content 2"),
         )?;
 
@@ -241,8 +236,7 @@ fn frost_pm_all_resolutions() -> Result<()> {
         // Third mark
         let mark2 = chain.append_mark(
             &["alice", "bob"], // Same participants as mark1 precommit
-            2,
-            Utc::now(),
+            Date::now(),
             Some("test content 3"),
         )?;
 

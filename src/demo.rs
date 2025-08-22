@@ -1,6 +1,6 @@
 use anyhow::{Result, bail};
 use bc_crypto::sha256;
-use chrono::Utc;
+use dcbor::Date;
 use frost_pm_test::{FrostGroup, FrostGroupConfig, pm_chain::FrostPmChain};
 use provenance_mark::ProvenanceMarkResolution;
 use rand::rngs::OsRng;
@@ -51,7 +51,7 @@ pub fn run_demo() -> Result<()> {
             &group,
             *res,
             &["alice", "bob"],
-            Utc::now(),
+            Date::now(),
             Some(artwork_name),
         )?;
 
@@ -72,8 +72,7 @@ pub fn run_demo() -> Result<()> {
 
             let mark = chain.append_mark(
                 &["alice", "bob"], // Same participants for consistency
-                seq,
-                Utc::now(),
+                Date::now(),
                 Some(content),
             )?;
 

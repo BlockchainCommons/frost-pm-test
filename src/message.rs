@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use dcbor::{CBOREncodable, Date};
 use frost_ed25519::Identifier;
 use provenance_mark::ProvenanceMarkResolution;
 
@@ -40,14 +40,14 @@ pub fn genesis_message(
 pub fn hash_message(
     id: &[u8],
     seq: usize,
-    date: DateTime<Utc>,
+    date: Date,
     obj_hash: &[u8],
 ) -> Vec<u8> {
     let mut m = Vec::new();
     m.extend_from_slice(DS_HASH);
     m.extend_from_slice(id); // linkLen bytes
     m.extend_from_slice(&seq.to_be_bytes());
-    m.extend_from_slice(&(date.timestamp_millis() as u64).to_be_bytes());
+    m.extend_from_slice(&(date.to_cbor_data()));
     m.extend_from_slice(&(obj_hash.len() as u16).to_be_bytes());
     m.extend_from_slice(obj_hash);
     m

@@ -204,3 +204,87 @@ fn frost_pm_different_signer_combinations() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn frost_pm_all_resolutions() -> Result<()> {
+    let config = FROSTGroupConfig::new(2, &["alice", "bob", "charlie"])
+        .map_err(|e| anyhow::anyhow!("Failed to create FROST config: {}", e))?;
+    let group = FROSTGroup::new_with_trusted_dealer(config, &mut OsRng)
+        .map_err(|e| anyhow::anyhow!("Failed to create FROST group: {}", e))?;
+
+    let resolutions = [
+        (ProvenanceMarkResolution::Low, "Low", 4),
+        (ProvenanceMarkResolution::Medium, "Medium", 8),
+        (ProvenanceMarkResolution::Quartile, "Quartile", 16),
+        (ProvenanceMarkResolution::High, "High", 32),
+    ];
+
+    for (res, name, expected_link_len) in resolutions {
+        println!("Testing {} resolution ({}-byte links)", name, expected_link_len);
+
+        // Test data for this resolution
+        let image1 = format!("genesis-{}", name).into_bytes();
+        let image2 = format!("second-{}", name).into_bytes();
+        let image3 = format!("third-{}", name).into_bytes();
+
+        let obj_hash1 = sha256(&image1);
+        let obj_hash2 = sha256(&image2);
+        let obj_hash3 = sha256(&image3);
+
+        // Genesis
+        let (mut chain, mark0) = FrostPmChain::new_genesis(
+            &group,
+            res,
+            &["alice", "bob"],
+            Utc::now(),
+            &obj_hash1,
+        )?;
+
+        // Verify genesis properties
+        assert!(mark0.is_genesis());
+        assert_eq!(mark0.res(), res);
+        assert_eq!(mark0.key().len(), expected_link_len);
+        assert_eq!(mark0.chain_id(), mark0.key()); // Genesis invariant
+        println!("  ✓ Genesis mark: {} ({})", mark0.identifier(), mark0.key().len());
+
+        // Second mark
+        let mark1 = chain.append_mark(
+            &["alice", "bob"], // Same participants as genesis precommit
+            1,
+            Utc::now(),
+            &obj_hash2,
+        )?;
+
+        // Verify chain properties
+        assert_eq!(mark1.seq(), 1);
+        assert_eq!(mark1.res(), res);
+        assert_eq!(mark1.key().len(), expected_link_len);
+        assert_eq!(mark1.chain_id(), mark0.chain_id());
+        println!("  ✓ Second mark: {} ({})", mark1.identifier(), mark1.key().len());
+
+        // Third mark
+        let mark2 = chain.append_mark(
+            &["alice", "bob"], // Same participants as mark1 precommit
+            2,
+            Utc::now(),
+            &obj_hash3,
+        )?;
+
+        // Verify chain properties
+        assert_eq!(mark2.seq(), 2);
+        assert_eq!(mark2.res(), res);
+        assert_eq!(mark2.key().len(), expected_link_len);
+        assert_eq!(mark2.chain_id(), mark0.chain_id());
+        println!("  ✓ Third mark: {} ({})", mark2.identifier(), mark2.key().len());
+
+        // Verify complete chain integrity
+        let marks = vec![mark0.clone(), mark1.clone(), mark2.clone()];
+        assert!(provenance_mark::ProvenanceMark::is_sequence_valid(&marks));
+        assert!(mark0.precedes(&mark1));
+        assert!(mark1.precedes(&mark2));
+
+        println!("  ✓ Chain integrity verified for {} resolution\n", name);
+    }
+
+    Ok(())
+}

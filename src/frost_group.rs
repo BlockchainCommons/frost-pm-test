@@ -203,6 +203,81 @@ impl FROSTGroup {
             .verify(message, signature)
             .map_err(|e| e.into())
     }
+
+    /// Round-1 only: collect commitments for stateless coordinator
+    /// Returns a map of Identifier -> SigningCommitments, and stores nonces locally
+    /// Participants must keep their SigningNonces until Round-2 completes
+    pub fn round1_commit(
+        &self,
+        signer_names: &[&str],
+        rng: &mut (impl RngCore + CryptoRng),
+    ) -> Result<(BTreeMap<Identifier, SigningCommitments>, BTreeMap<String, SigningNonces>), Box<dyn std::error::Error>> {
+        if signer_names.len() < self.min_signers as usize {
+            return Err(format!(
+                "Need at least {} signers, got {}",
+                self.min_signers,
+                signer_names.len()
+            )
+            .into());
+        }
+
+        // Validate all signer names exist upfront
+        for &signer_name in signer_names {
+            self.key_package(signer_name)?; // This validates the name exists
+        }
+
+        let mut commitments_map: BTreeMap<Identifier, SigningCommitments> = BTreeMap::new();
+        let mut nonces_map: BTreeMap<String, SigningNonces> = BTreeMap::new();
+
+        for &signer_name in signer_names {
+            let (nonces, commitments) = self.commit_for_participant(signer_name, rng)?;
+            let signer_id = self.name_to_id(signer_name)?;
+            commitments_map.insert(signer_id, commitments);
+            nonces_map.insert(signer_name.to_string(), nonces);
+        }
+
+        Ok((commitments_map, nonces_map))
+    }
+
+    /// Round-2: replay commitments and perform signing
+    /// Requires the same commitments from Round-1 and the nonces kept by participants
+    pub fn round2_sign(
+        &self,
+        signer_names: &[&str],
+        commitments_map: &BTreeMap<Identifier, SigningCommitments>,
+        nonces_map: &BTreeMap<String, SigningNonces>,
+        message: &[u8],
+    ) -> Result<Signature, Box<dyn std::error::Error>> {
+        if signer_names.len() < self.min_signers as usize {
+            return Err(format!(
+                "Need at least {} signers, got {}",
+                self.min_signers,
+                signer_names.len()
+            )
+            .into());
+        }
+
+        // Create signing package from the commitments
+        let signing_package = SigningPackage::new(commitments_map.clone(), message);
+
+        // Round 2: Generate signature shares
+        let mut signature_shares: BTreeMap<Identifier, SignatureShare> = BTreeMap::new();
+        for &signer_name in signer_names {
+            let signer_id = self.name_to_id(signer_name)?;
+            let nonces = &nonces_map[signer_name];
+            let signature_share = self.sign_for_participant(signer_name, &signing_package, nonces)?;
+            signature_shares.insert(signer_id, signature_share);
+        }
+
+        // Aggregate signature
+        let group_signature = frost::aggregate(
+            &signing_package,
+            &signature_shares,
+            &self.public_key_package,
+        )?;
+
+        Ok(group_signature)
+    }
 }
 
 impl FROSTGroup {

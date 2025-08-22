@@ -4,8 +4,9 @@ use crate::{
     message::{genesis_message, hash_message},
 };
 use anyhow::{Result, bail};
-use bc_crypto::hkdf_hmac_sha256;
+use bc_crypto::{hkdf_hmac_sha256, sha256};
 use chrono::{DateTime, Utc};
+use dcbor::CBOREncodable;
 use frost_ed25519::{
     Identifier, round1::SigningCommitments, round1::SigningNonces,
 };
@@ -45,7 +46,7 @@ pub fn prev_commitment_matches(
 #[derive(Clone, Debug)]
 pub struct ChainMeta {
     pub res: ProvenanceMarkResolution,
-    pub id: Vec<u8>,   // == key_0
+    pub id: Vec<u8>,     // == key_0
     pub seq_next: usize, // next sequence to produce
     pub last_date: DateTime<Utc>,
 }
@@ -69,7 +70,7 @@ impl<'g> FrostPmChain<'g> {
         res: ProvenanceMarkResolution,
         genesis_signers: &[&str],
         date0: DateTime<Utc>,
-        _obj_hash: &[u8], // e.g., SHA-256(image)
+        info: Option<impl CBOREncodable>,
     ) -> Result<(Self, ProvenanceMark)> {
         if genesis_signers.len() < group.min_signers() as usize {
             bail!("insufficient signers");
@@ -122,7 +123,7 @@ impl<'g> FrostPmChain<'g> {
             id.clone(),
             0,
             pm_date,
-            None::<String>,
+            info,
         )?;
 
         // Store the genesis mark and update the sequence
@@ -146,9 +147,8 @@ impl<'g> FrostPmChain<'g> {
 
         // 1. Collect commitments for seq_next
         // Each participant runs round1::commit and retains SigningNonces locally.
-        let (commitments_map, nonces_map) = self
-            .group
-            .round1_commit(participants, &mut OsRng)?;
+        let (commitments_map, nonces_map) =
+            self.group.round1_commit(participants, &mut OsRng)?;
 
         // 2. Compute Root_{seq_next} = commitments_root(&commitments_map)
         let root_next = commitments_root(&commitments_map);
@@ -185,7 +185,7 @@ impl<'g> FrostPmChain<'g> {
         participants: &[&str],
         seq: usize,
         date: DateTime<Utc>,
-        obj_hash: &[u8],
+        info: Option<impl CBOREncodable>,
     ) -> Result<ProvenanceMark> {
         if participants.len() < self.group.min_signers() as usize {
             bail!("insufficient signers");
@@ -233,12 +233,23 @@ impl<'g> FrostPmChain<'g> {
         }
 
         // 5. Build message for Round-2 signing (standard PM message format)
-        let message = hash_message(&self.meta.id, seq, date, obj_hash);
+        // Hash the info to create obj_hash for the signing message
+        // If info is provided, serialize it to CBOR and hash it; otherwise use empty bytes
+        let info_bytes = if let Some(ref info_val) = info {
+            info_val.to_cbor_data()
+        } else {
+            Vec::new()
+        };
+        let obj_hash = sha256(&info_bytes);
+        let message = hash_message(&self.meta.id, seq, date, &obj_hash);
 
         // 6. Perform Round-2 using the SAME commitments and stored nonces
-        let _signature = self
-            .group
-            .round2_sign(participants, commitments_map, stored_nonces, &message)?;
+        let _signature = self.group.round2_sign(
+            participants,
+            commitments_map,
+            stored_nonces,
+            &message,
+        )?;
 
         // 7. BEFORE finalizing this mark's hash, run precommit for seq+1 to get nextKey_seq
         let next_receipt = self.precommit_next_mark(participants, seq + 1)?;
@@ -256,7 +267,7 @@ impl<'g> FrostPmChain<'g> {
             self.meta.id.clone(),
             seq as u32,
             pm_date,
-            None::<String>,
+            info,
         )?;
 
         // 10. Update state and store the new mark for future verification

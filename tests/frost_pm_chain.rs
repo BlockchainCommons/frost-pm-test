@@ -1,5 +1,4 @@
 use anyhow::Result;
-use bc_crypto::sha256;
 use chrono::Utc;
 use frost_pm_test::{FrostGroup, FrostGroupConfig, pm_chain::FrostPmChain};
 use provenance_mark::ProvenanceMarkResolution;
@@ -13,8 +12,7 @@ fn frost_controls_pm_chain() -> Result<()> {
     let res = ProvenanceMarkResolution::Quartile;
 
     // Fake "image" for genesis
-    let image = b"demo image bytes";
-    let obj_hash = sha256(image);
+    let image_content = "demo image bytes";
 
     // Genesis from alice+bob
     let (mut chain, mark0) = FrostPmChain::new_genesis(
@@ -22,34 +20,32 @@ fn frost_controls_pm_chain() -> Result<()> {
         res,
         &["alice", "bob"],
         Utc::now(),
-        &obj_hash,
+        Some(image_content),
     )?;
 
     println!("Genesis mark created: {}", mark0.identifier());
     assert!(mark0.is_genesis());
 
     // Create second mark with a different "image"
-    let image2 = b"second image bytes";
-    let obj_hash2 = sha256(image2);
+    let image2_content = "second image bytes";
 
     let mark1 = chain.append_mark(
         &["alice", "bob"], // Use same participants as genesis precommit
         1,
         Utc::now(),
-        &obj_hash2,
+        Some(image2_content),
     )?;
 
     println!("Second mark created: {}", mark1.identifier());
 
     // Create third mark with yet another "image"
-    let image3 = b"third image bytes";
-    let obj_hash3 = sha256(image3);
+    let image3_content = "third image bytes";
 
     let mark2 = chain.append_mark(
         &["alice", "bob"], // Use same participants as mark1 precommit
         2,
         Utc::now(),
-        &obj_hash3,
+        Some(image3_content),
     )?;
 
     println!("Third mark created: {}", mark2.identifier());
@@ -90,8 +86,6 @@ fn frost_pm_chain_insufficient_signers_fails() -> Result<()> {
     let config = FrostGroupConfig::new(2, &["alice", "bob", "charlie"])?;
     let group = FrostGroup::new_with_trusted_dealer(config, &mut OsRng)?;
     let res = ProvenanceMarkResolution::Medium;
-    let image = b"test image";
-    let obj_hash = sha256(image);
 
     // Try to create genesis with only 1 signer (threshold is 2)
     let result = FrostPmChain::new_genesis(
@@ -99,7 +93,7 @@ fn frost_pm_chain_insufficient_signers_fails() -> Result<()> {
         res,
         &["alice"], // Only 1 signer, but threshold is 2
         Utc::now(),
-        &obj_hash,
+        Some("test content"),
     );
 
     assert!(result.is_err());
@@ -118,8 +112,6 @@ fn frost_pm_chain_date_monotonicity() -> Result<()> {
     let config = FrostGroupConfig::new(2, &["alice", "bob", "charlie"])?;
     let group = FrostGroup::new_with_trusted_dealer(config, &mut OsRng)?;
     let res = ProvenanceMarkResolution::High;
-    let image = b"genesis image";
-    let obj_hash = sha256(image);
 
     let genesis_time = Utc::now();
     let (mut chain, _mark0) = FrostPmChain::new_genesis(
@@ -127,11 +119,8 @@ fn frost_pm_chain_date_monotonicity() -> Result<()> {
         res,
         &["alice", "bob"],
         genesis_time,
-        &obj_hash,
+        Some("test content"),
     )?;
-
-    let image2 = b"second image";
-    let obj_hash2 = sha256(image2);
 
     // Try to create a mark with earlier date than genesis (should fail)
     let earlier_time = genesis_time - chrono::Duration::seconds(60);
@@ -139,7 +128,7 @@ fn frost_pm_chain_date_monotonicity() -> Result<()> {
         &["alice", "bob"], // Use same participants as genesis precommit
         1,
         earlier_time,
-        &obj_hash2,
+        Some("test content 2"),
     );
 
     assert!(result.is_err());
@@ -160,27 +149,21 @@ fn frost_pm_different_signer_combinations() -> Result<()> {
     let group = FrostGroup::new_with_trusted_dealer(config, &mut OsRng)?;
     let res = ProvenanceMarkResolution::Low;
 
-    let image1 = b"image1";
-    let obj_hash1 = sha256(image1);
-
     // Genesis with alice, bob, charlie
     let (mut chain, mark0) = FrostPmChain::new_genesis(
         &group,
         res,
         &["alice", "bob", "charlie"],
         Utc::now(),
-        &obj_hash1,
+        Some("test content 1"),
     )?;
-
-    let image2 = b"image2";
-    let obj_hash2 = sha256(image2);
 
     // Next mark with same participants as genesis precommit
     let mark1 = chain.append_mark(
         &["alice", "bob", "charlie"], // Use same participants as genesis precommit
         1,
         Utc::now(),
-        &obj_hash2,
+        Some("test content 2"),
     )?;
 
     // Verify both marks are valid and form a proper chain
@@ -215,13 +198,6 @@ fn frost_pm_all_resolutions() -> Result<()> {
         );
 
         // Test data for this resolution
-        let image1 = format!("genesis-{}", name).into_bytes();
-        let image2 = format!("second-{}", name).into_bytes();
-        let image3 = format!("third-{}", name).into_bytes();
-
-        let obj_hash1 = sha256(&image1);
-        let obj_hash2 = sha256(&image2);
-        let obj_hash3 = sha256(&image3);
 
         // Genesis
         let (mut chain, mark0) = FrostPmChain::new_genesis(
@@ -229,7 +205,7 @@ fn frost_pm_all_resolutions() -> Result<()> {
             res,
             &["alice", "bob"],
             Utc::now(),
-            &obj_hash1,
+            Some("test content 1"),
         )?;
 
         // Verify genesis properties
@@ -248,7 +224,7 @@ fn frost_pm_all_resolutions() -> Result<()> {
             &["alice", "bob"], // Same participants as genesis precommit
             1,
             Utc::now(),
-            &obj_hash2,
+            Some("test content 2"),
         )?;
 
         // Verify chain properties
@@ -267,7 +243,7 @@ fn frost_pm_all_resolutions() -> Result<()> {
             &["alice", "bob"], // Same participants as mark1 precommit
             2,
             Utc::now(),
-            &obj_hash3,
+            Some("test content 3"),
         )?;
 
         // Verify chain properties

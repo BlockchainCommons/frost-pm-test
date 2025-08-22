@@ -52,7 +52,7 @@ pub fn run_demo() -> Result<()> {
             *res,
             &["alice", "bob"],
             Utc::now(),
-            &obj_hash1,
+            Some(artwork_name),
         )?;
 
         println!(
@@ -69,13 +69,12 @@ pub fn run_demo() -> Result<()> {
         for seq in 1..MARK_COUNT {
             // Vary the content for each mark
             let content = format!("Edition #{} of collection #{}", seq, i + 1);
-            let obj_hash = sha256(content.as_bytes());
 
             let mark = chain.append_mark(
                 &["alice", "bob"], // Same participants for consistency
                 seq,
                 Utc::now(),
-                &obj_hash,
+                Some(content),
             )?;
 
             all_marks.push(mark);

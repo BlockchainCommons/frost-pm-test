@@ -74,3 +74,13 @@ pub fn kdf_next(
     let len = link_len(res);
     hash[..len].to_vec()
 }
+
+/// Alternative name following expert's specification
+pub fn derive_link_from_root(
+    res: ProvenanceMarkResolution,
+    chain_id: &[u8],
+    seq: u32,
+    root: [u8; 32],
+) -> Vec<u8> {
+    kdf_next(chain_id, seq, root, res)
+}

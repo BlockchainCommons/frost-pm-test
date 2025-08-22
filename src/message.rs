@@ -3,9 +3,8 @@ use frost_ed25519::Identifier;
 use provenance_mark::ProvenanceMarkResolution;
 
 pub const DS_GENESIS: &[u8] = b"BC:ProvMark:FROST:v1:GENESIS\0";
-pub const DS_HASH:    &[u8] = b"BC:ProvMark:FROST:v1:HASH\0";
-pub const DS_KDF_K0:  &[u8] = b"BC:ProvMark:FROST:v1:KDF:key0\0";
-pub const DS_KDF_NXT: &[u8] = b"BC:ProvMark:FROST:v1:KDF:next\0";
+pub const DS_HASH: &[u8] = b"BC:ProvMark:FROST:v1:HASH\0";
+pub const DS_KDF_K0: &[u8] = b"BC:ProvMark:FROST:v1:KDF:key0\0";
 
 pub fn res_code(res: ProvenanceMarkResolution) -> u8 {
     match res {

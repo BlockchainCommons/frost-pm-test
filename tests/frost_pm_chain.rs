@@ -1,7 +1,7 @@
 use anyhow::Result;
 use chrono::Utc;
 use frost_pm_test::{
-    FROSTGroupConfig, FROSTGroup, kdf::sha256, pm_chain::FrostPmChain,
+    FROSTGroup, FROSTGroupConfig, kdf::sha256, pm_chain::FrostPmChain,
 };
 use provenance_mark::ProvenanceMarkResolution;
 use rand::rngs::OsRng;
@@ -19,8 +19,8 @@ fn frost_controls_pm_chain() -> Result<()> {
     let image = b"demo image bytes";
     let obj_hash = sha256(image);
 
-    // Genesis from alice+bob
-    let (mut chain, mark0, next_key0) = FrostPmChain::new_genesis(
+    // Genesis from alice+bob (stateless approach)
+    let (mut chain, mark0) = FrostPmChain::new_genesis(
         &group,
         res,
         &["alice", "bob"],
@@ -31,30 +31,28 @@ fn frost_controls_pm_chain() -> Result<()> {
     println!("Genesis mark created: {}", mark0.identifier());
     assert!(mark0.is_genesis());
 
-    // Create second mark with a different "image"
+    // Create second mark with a different "image" (stateless approach)
     let image2 = b"second image bytes";
     let obj_hash2 = sha256(image2);
 
-    let (mark1, next_key1) = chain.append_mark_with_key(
-        &["bob", "charlie"],
+    let mark1 = chain.append_mark_stateless(
+        &["alice", "bob"], // Use same participants as genesis precommit
+        1,
         Utc::now(),
         &obj_hash2,
-        next_key0,
-        1,
     )?;
 
     println!("Second mark created: {}", mark1.identifier());
 
-    // Create third mark with yet another "image"
+    // Create third mark with yet another "image" (stateless approach)
     let image3 = b"third image bytes";
     let obj_hash3 = sha256(image3);
 
-    let (mark2, _next_key2) = chain.append_mark_with_key(
-        &["alice", "charlie"],
+    let mark2 = chain.append_mark_stateless(
+        &["alice", "bob"], // Use same participants as mark1 precommit
+        2,
         Utc::now(),
         &obj_hash3,
-        next_key1,
-        2,
     )?;
 
     println!("Third mark created: {}", mark2.identifier());
@@ -131,7 +129,7 @@ fn frost_pm_chain_date_monotonicity() -> Result<()> {
     let obj_hash = sha256(image);
 
     let genesis_time = Utc::now();
-    let (mut chain, _mark0, next_key0) = FrostPmChain::new_genesis(
+    let (mut chain, _mark0) = FrostPmChain::new_genesis(
         &group,
         res,
         &["alice", "bob"],
@@ -144,12 +142,11 @@ fn frost_pm_chain_date_monotonicity() -> Result<()> {
 
     // Try to create a mark with earlier date than genesis (should fail)
     let earlier_time = genesis_time - chrono::Duration::seconds(60);
-    let result = chain.append_mark_with_key(
-        &["bob", "charlie"],
+    let result = chain.append_mark_stateless(
+        &["alice", "bob"], // Use same participants as genesis precommit
+        1,
         earlier_time,
         &obj_hash2,
-        next_key0,
-        1,
     );
 
     assert!(result.is_err());
@@ -175,8 +172,8 @@ fn frost_pm_different_signer_combinations() -> Result<()> {
     let image1 = b"image1";
     let obj_hash1 = sha256(image1);
 
-    // Genesis with alice, bob, charlie
-    let (mut chain, mark0, next_key0) = FrostPmChain::new_genesis(
+    // Genesis with alice, bob, charlie (stateless approach)
+    let (mut chain, mark0) = FrostPmChain::new_genesis(
         &group,
         res,
         &["alice", "bob", "charlie"],
@@ -187,13 +184,12 @@ fn frost_pm_different_signer_combinations() -> Result<()> {
     let image2 = b"image2";
     let obj_hash2 = sha256(image2);
 
-    // Next mark with bob, charlie, dave
-    let (mark1, _next_key1) = chain.append_mark_with_key(
-        &["bob", "charlie", "dave"],
+    // Next mark with same participants as genesis precommit (stateless approach)
+    let mark1 = chain.append_mark_stateless(
+        &["alice", "bob", "charlie"], // Use same participants as genesis precommit
+        1,
         Utc::now(),
         &obj_hash2,
-        next_key0,
-        1,
     )?;
 
     // Verify both marks are valid and form a proper chain

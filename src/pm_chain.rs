@@ -1,7 +1,7 @@
 use crate::{
     FROSTGroup,
     kdf::{commitments_root, hkdf_next, kdf_next, link_len},
-    message::{DS_KDF_K0, DS_KDF_NXT, genesis_message, hash_message},
+    message::{DS_KDF_K0, genesis_message, hash_message},
 };
 use anyhow::{Result, bail};
 use chrono::{DateTime, Utc};
@@ -24,7 +24,7 @@ pub struct PrecommitReceipt {
 
 /// Check if the candidate nextKey matches what the previous mark committed to
 /// This is done by recomputing the previous mark's hash with the candidate nextKey
-fn prev_commitment_matches(
+pub fn prev_commitment_matches(
     prev: &ProvenanceMark,
     candidate_next_key: &[u8],
 ) -> Result<bool> {
@@ -57,22 +57,26 @@ pub struct FrostPmChain<'g> {
     // In a real distributed system, participants would manage this locally
     current_receipt: Option<PrecommitReceipt>,
     current_nonces: Option<BTreeMap<String, SigningNonces>>,
+    // Store the last mark for chain verification
+    last_mark: Option<ProvenanceMark>,
 }
 
 impl<'g> FrostPmChain<'g> {
-    // Create genesis: run one FROST session for key_0, one for nextKey_0, then build Mark 0.
+    // Create stateless genesis: derive key_0, precommit seq=1, then finalize Mark 0.
+    // This follows the expert's recommended approach for chain integrity
     pub fn new_genesis(
         group: &'g FROSTGroup,
         res: ProvenanceMarkResolution,
         genesis_signers: &[&str],
         date0: DateTime<Utc>,
-        obj_hash: &[u8], // e.g., SHA-256(image)
-    ) -> Result<(Self, ProvenanceMark, Vec<u8>)> {
+        _obj_hash: &[u8], // e.g., SHA-256(image)
+    ) -> Result<(Self, ProvenanceMark)> {
         if genesis_signers.len() < group.min_signers() as usize {
             bail!("insufficient signers");
         }
         let ll = link_len(res);
 
+        // 1. Derive key_0 (and thus id) with a one-time genesis signing
         // Build M0 from public group data
         let participant_names = group.participant_names();
         let ids: Vec<Identifier> = participant_names
@@ -92,87 +96,43 @@ impl<'g> FrostPmChain<'g> {
         // id == key0 (genesis invariant)
         let id = key0.clone();
 
-        // Per-mark signing for nextKey_0:
-        let m_hash0 = hash_message(&id, 0, date0, obj_hash);
-        let sig_hash0 = group
-            .sign(&m_hash0, genesis_signers, &mut OsRng)
-            .map_err(|e| {
-                anyhow::anyhow!("Failed to sign hash message: {}", e)
-            })?;
-        let next_key0 =
-            hkdf_next(ll, &sig_hash0.serialize()?, &m_hash0, DS_KDF_NXT);
+        // 2. Precommit for seq=1 (Round-1 only)
+        // Collect SigningCommitments for seq=1 from the chosen quorum
+        let mut chain = Self {
+            group,
+            meta: ChainMeta {
+                res,
+                id: id.clone(),
+                seq_next: 0,
+                last_date: date0,
+            },
+            current_receipt: None,
+            current_nonces: None,
+            last_mark: None,
+        };
 
-        // Convert chrono::DateTime to dcbor::Date for ProvenanceMark
+        let receipt1 = chain.precommit_next_mark(genesis_signers, 1)?;
+
+        // Compute nextKey_0 = derive_link_from_root(res, id, 1, Root_1)
+        let next_key0 = kdf_next(&id, 1, receipt1.root, res);
+
+        // 3. Finalize M⟨0⟩ with key_0 and this nextKey_0
         let pm_date = dcbor::Date::from_timestamp(date0.timestamp() as f64);
-
-        // Build mark 0 (no info)
         let mark0 = ProvenanceMark::new(
             res,
             key0,
-            next_key0.clone(),
+            next_key0,
             id.clone(),
             0,
             pm_date,
             None::<String>,
-        )?; // uses PM crate logic for hash/truncation
-
-        let meta = ChainMeta { res, id, seq_next: 1, last_date: date0 };
-        Ok((
-            Self {
-                group,
-                meta,
-                current_receipt: None,
-                current_nonces: None,
-            },
-            mark0,
-            next_key0,
-        ))
-    }
-
-    // Append one mark: reveal previous nextKey as key_i, sign M_i to derive nextKey_i.
-    pub fn append_mark_with_key(
-        &mut self,
-        signers: &[&str],
-        date: DateTime<Utc>,
-        obj_hash: &[u8],
-        key_i: Vec<u8>, // == previous nextKey
-        seq_i: u32,     // normally self.meta.seq_next
-    ) -> Result<(ProvenanceMark, Vec<u8>)> {
-        if signers.len() < self.group.min_signers() as usize {
-            bail!("insufficient signers");
-        }
-        if date < self.meta.last_date {
-            bail!("date monotonicity violated");
-        }
-        let ll = link_len(self.meta.res);
-
-        // Derive nextKey_i from FROST over M_i
-        let m_hash_i = hash_message(&self.meta.id, seq_i, date, obj_hash);
-        let sig_i =
-            self.group
-                .sign(&m_hash_i, signers, &mut OsRng)
-                .map_err(|e| {
-                    anyhow::anyhow!("Failed to sign hash message: {}", e)
-                })?;
-        let next_key_i =
-            hkdf_next(ll, &sig_i.serialize()?, &m_hash_i, DS_KDF_NXT);
-
-        // Convert chrono::DateTime to dcbor::Date for ProvenanceMark
-        let pm_date = dcbor::Date::from_timestamp(date.timestamp() as f64);
-
-        let mark_i = ProvenanceMark::new(
-            self.meta.res,
-            key_i.clone(),
-            next_key_i.clone(),
-            self.meta.id.clone(),
-            seq_i,
-            pm_date,
-            None::<String>,
         )?;
 
-        self.meta.seq_next = seq_i + 1;
-        self.meta.last_date = date;
-        Ok((mark_i, next_key_i))
+        // Store the genesis mark and update the sequence
+        chain.last_mark = Some(mark0.clone());
+        chain.meta.seq_next = 1;
+
+        Ok((chain, mark0))
     }
 
     /// Precommit for next mark (Round-1 only) - implements expert's stateless approach
@@ -270,10 +230,19 @@ impl<'g> FrostPmChain<'g> {
         // 3. Derive key_seq from the receipt's root (which matches the commitments)
         let key_seq = kdf_next(&self.meta.id, seq, receipt.root, self.meta.res);
 
-        // 4. Build message for Round-2 signing (standard PM message format)
+        // 4. Verify that this key_seq matches what the previous mark committed to
+        if let Some(prev_mark) = &self.last_mark {
+            if !prev_commitment_matches(prev_mark, &key_seq)? {
+                bail!(
+                    "Chain integrity check failed: key_seq doesn't match previous mark's nextKey"
+                );
+            }
+        }
+
+        // 5. Build message for Round-2 signing (standard PM message format)
         let message = hash_message(&self.meta.id, seq, date, obj_hash);
 
-        // 5. Perform Round-2 using the SAME commitments and stored nonces
+        // 6. Perform Round-2 using the SAME commitments and stored nonces
         let _signature = self
             .group
             .round2_sign(participants, commitments_map, stored_nonces, &message)
@@ -281,15 +250,15 @@ impl<'g> FrostPmChain<'g> {
                 anyhow::anyhow!("Failed to complete Round-2 signing: {}", e)
             })?;
 
-        // 6. BEFORE finalizing this mark's hash, run precommit for seq+1 to get nextKey_seq
+        // 7. BEFORE finalizing this mark's hash, run precommit for seq+1 to get nextKey_seq
         let next_receipt = self.precommit_next_mark(participants, seq + 1)?;
         let next_key_seq =
             kdf_next(&self.meta.id, seq + 1, next_receipt.root, self.meta.res);
 
-        // 7. Convert chrono::DateTime to dcbor::Date for ProvenanceMark
+        // 8. Convert chrono::DateTime to dcbor::Date for ProvenanceMark
         let pm_date = dcbor::Date::from_timestamp(date.timestamp() as f64);
 
-        // 8. Use key_seq and next_key_seq to create the mark
+        // 9. Use key_seq and next_key_seq to create the mark
         let mark = ProvenanceMark::new(
             self.meta.res,
             key_seq,
@@ -300,11 +269,10 @@ impl<'g> FrostPmChain<'g> {
             None::<String>,
         )?;
 
-        // 9. Update state and clear the used nonces (they're one-time use)
+        // 10. Update state and store the new mark for future verification
+        self.last_mark = Some(mark.clone());
         self.meta.seq_next = seq + 1;
         self.meta.last_date = date;
-        // Clear the used receipt and nonces since they've been consumed
-        // (The new ones for seq+1 are already stored from step 6)
 
         Ok(mark)
     }

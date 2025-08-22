@@ -26,8 +26,8 @@ pub fn run_demo() -> Result<()> {
     println!("   Artwork: {:?}", String::from_utf8_lossy(image1));
     println!("   Object hash: {}", hex::encode(&obj_hash1));
 
-    // Genesis: Alice + Bob sign
-    let (mut chain, mark0, _next_key0) = FrostPmChain::new_genesis(
+    // Genesis: Alice + Bob sign (stateless approach from the start)
+    let (mut chain, mark0) = FrostPmChain::new_genesis(
         &group,
         ProvenanceMarkResolution::Quartile,
         &["alice", "bob"],
@@ -52,19 +52,16 @@ pub fn run_demo() -> Result<()> {
     println!("   Artwork: {:?}", String::from_utf8_lossy(image2));
     println!("   Object hash: {}", hex::encode(&obj_hash2));
 
-    // Stateless approach: 1) Precommit for NEXT mark — Round‑1 only.
-    // This computes and CONSUMES nextKey_0 to finalize the PREVIOUS mark (0) internally
-    let _receipt1 = chain.precommit_next_mark(&["bob", "charlie"], 1)?;
-
-    // 2) Append this mark — use the SAME commitments from precommit, run Round‑2 for seq=1
+    // Stateless approach: use the commitments that were already generated during genesis for seq=1
+    // 2) Append this mark — use the SAME commitments from genesis precommit, run Round‑2 for seq=1
     let mark1 = chain.append_mark_stateless(
-        &["bob", "charlie"],
+        &["alice", "bob"],
         1,
         Utc::now(),
         &obj_hash2,
     )?;
 
-    println!("   Signers: Bob, Charlie");
+    println!("   Signers: Alice, Bob (same as genesis precommit)");
     println!("   ✓ Second mark created: {}", mark1.identifier());
     println!("   Sequence: {}\n", mark1.seq());
 
@@ -77,17 +74,17 @@ pub fn run_demo() -> Result<()> {
     println!("   Artwork: {:?}", String::from_utf8_lossy(image3));
     println!("   Object hash: {}", hex::encode(&obj_hash3));
 
-    // Stateless approach continues: precommit for mark 2, then append mark 2
-    let _receipt2 = chain.precommit_next_mark(&["alice", "charlie"], 2)?;
+    // Stateless approach continues: append mark 2 using the same participants as the precommit from mark 1
     let mark2 = chain.append_mark_stateless(
-        &["alice", "charlie"],
+        &["alice", "bob"],
         2,
         Utc::now(),
         &obj_hash3,
     )?;
 
-    println!("   Signers: Alice, Charlie");
+    println!("   Signers: Alice, Bob (same as mark 1 precommit)");
     println!("   ✓ Third mark created: {}", mark2.identifier());
+    println!("   Sequence: {}\n", mark2.seq());
     println!("   Sequence: {}\n", mark2.seq());
 
     // Verify the chain

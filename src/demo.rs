@@ -18,7 +18,11 @@ pub fn run_demo() -> Result<()> {
     // Create a 2-of-3 FROST group
     println!("1. Creating FROST group with participants: Alice, Bob, Charlie");
     println!("   Threshold: 2 of 3 signers required");
-    let config = FrostGroupConfig::new(2, &["alice", "bob", "charlie"], "Demo provenance mark chain".to_string())?;
+    let config = FrostGroupConfig::new(
+        2,
+        &["alice", "bob", "charlie"],
+        "Demo provenance mark chain".to_string(),
+    )?;
     let group = FrostGroup::new_with_trusted_dealer(config, &mut OsRng)?;
     println!("   ✓ FROST group created successfully\n");
 
@@ -46,10 +50,29 @@ pub fn run_demo() -> Result<()> {
         println!("   Collection: \"{}\"", artwork_name);
         println!("   Genesis hash: {}", hex::encode(&obj_hash1));
 
+        // Client generates genesis message and signs it
+        let genesis_msg = FrostPmChain::genesis_message(&group);
+        let genesis_signature = group.sign(
+            genesis_msg.as_bytes(),
+            &["alice", "bob"],
+            &mut OsRng,
+        )?;
+
+        // Client generates Round-1 commitments for seq=1
+        let (seq1_commitments, seq1_nonces) =
+            FrostPmChain::generate_round1_commitments(
+                &group,
+                &["alice", "bob"],
+                &mut OsRng,
+            )?;
+
         // Genesis
         let (mut chain, genesis_mark, mut current_receipt, mut current_nonces) =
             FrostPmChain::new_genesis(
                 group.clone(),
+                genesis_signature,
+                seq1_commitments,
+                seq1_nonces,
                 *res,
                 &["alice", "bob"],
                 Date::now(),
@@ -70,13 +93,31 @@ pub fn run_demo() -> Result<()> {
         for seq in 1..MARK_COUNT {
             // Vary the content for each mark
             let content = format!("Edition #{} of collection #{}", seq, i + 1);
+            let mark_date = Date::now();
+
+            // Client generates message and Round-2 signature
+            let message = FrostPmChain::next_mark_message(
+                &chain,
+                mark_date.clone(),
+                Some(content.clone()),
+            );
+
+            let signers = &["alice", "bob"];
+
+            let signature = FrostPmChain::generate_round2_signature(
+                chain.group(),
+                signers,
+                &current_receipt.commitments,
+                &current_nonces,
+                &message,
+            )?;
 
             let (mark, new_receipt, new_nonces) = chain.append_mark(
-                &["alice", "bob"], // Same participants for consistency
-                Date::now(),
+                signers,
+                mark_date,
                 Some(content),
                 &current_receipt,
-                &current_nonces,
+                signature,
             )?;
 
             // Update for next iteration

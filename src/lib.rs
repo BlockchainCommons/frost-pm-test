@@ -17,7 +17,6 @@ pub mod frost_group_config;
 
 // FROST-controlled provenance mark modules
 pub mod kdf;
-pub mod message;
 pub mod pm_chain;
 
 pub use frost_group::FrostGroup;

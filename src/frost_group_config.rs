@@ -90,19 +90,6 @@ impl FrostGroupConfig {
     pub(crate) fn participants(&self) -> &BTreeMap<String, Identifier> {
         &self.participants
     }
-
-    /// Create a genesis message for a new provenance mark chain
-    /// This combines the configuration parameters into a canonical message format
-    pub fn genesis_message(&self) -> String {
-        let participant_names: Vec<String> = self.participants.keys().cloned().collect();
-        format!(
-            "FROST Genesis\nThreshold: {} of {}\nParticipants: {}\nCharter: {}",
-            self.min_signers,
-            participant_names.len(),
-            participant_names.join(", "),
-            self.charter
-        )
-    }
 }
 
 impl Default for FrostGroupConfig {

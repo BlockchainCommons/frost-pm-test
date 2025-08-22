@@ -1,10 +1,9 @@
 use crate::{
     FrostGroup,
     kdf::{commitments_root, kdf_next},
-    message::hash_message,
 };
 use anyhow::{Result, bail};
-use bc_crypto::{hkdf_hmac_sha256, sha256};
+use bc_crypto::hkdf_hmac_sha256;
 use dcbor::{CBOREncodable, Date};
 use frost_ed25519::{
     Identifier, round1::SigningCommitments, round1::SigningNonces,
@@ -63,10 +62,75 @@ impl FrostPmChain {
         self.last_mark.seq() as usize + 1
     }
 
+    /// Get a reference to the underlying FROST group (for client use)
+    pub fn group(&self) -> &FrostGroup {
+        &self.group
+    }
+
+    /// Create a genesis message for a group (static version for new_genesis)
+    pub fn genesis_message(group: &FrostGroup) -> String {
+        let config = group.config();
+        let participant_names: Vec<String> =
+            config.participants().keys().cloned().collect();
+        format!(
+            "FROST Genesis\nThreshold: {} of {}\nParticipants: {}\nCharter: {}",
+            config.min_signers(),
+            participant_names.len(),
+            participant_names.join(", "),
+            config.charter()
+        )
+    }
+
+    pub fn next_mark_message(
+        self: &Self,
+        date: Date,
+        info: Option<impl CBOREncodable>,
+    ) -> Vec<u8> {
+        let mut m = Vec::new();
+        m.extend_from_slice(b"DS_HASH\0"); // domain separation
+        m.extend_from_slice(self.chain_id());
+        m.extend_from_slice(&self.next_seq().to_be_bytes());
+        m.extend_from_slice(&(date.to_cbor_data()));
+        let info_bytes = if let Some(ref info_val) = info {
+            info_val.to_cbor_data()
+        } else {
+            Vec::new()
+        };
+        m.extend_from_slice(&(info_bytes.len() as u32).to_be_bytes());
+        m.extend_from_slice(&info_bytes);
+        m
+    }
+
+    /// Generate Round-1 commitments for a group (for client use)
+    pub fn generate_round1_commitments(
+        group: &FrostGroup,
+        signers: &[&str],
+        rng: &mut (impl rand::RngCore + rand::CryptoRng),
+    ) -> Result<(
+        BTreeMap<Identifier, SigningCommitments>,
+        BTreeMap<String, SigningNonces>,
+    )> {
+        group.round1_commit(signers, rng)
+    }
+
+    /// Generate Round-2 signature for a group (for client use)
+    pub fn generate_round2_signature(
+        group: &FrostGroup,
+        signers: &[&str],
+        commitments: &BTreeMap<Identifier, SigningCommitments>,
+        nonces: &BTreeMap<String, SigningNonces>,
+        message: &[u8],
+    ) -> Result<frost_ed25519::Signature> {
+        group.round2_sign(signers, commitments, nonces, message)
+    }
+
     // Create genesis: derive key_0, precommit seq=1, then finalize Mark 0.
     // Returns the chain, genesis mark, and initial precommit data for seq=1
     pub fn new_genesis(
         group: FrostGroup,
+        genesis_message_signature: frost_ed25519::Signature,
+        seq1_commitments: BTreeMap<Identifier, SigningCommitments>,
+        seq1_nonces: BTreeMap<String, SigningNonces>,
         res: ProvenanceMarkResolution,
         signers: &[&str],
         date: Date,
@@ -82,27 +146,27 @@ impl FrostPmChain {
         }
         let link_len = res.link_length();
 
-        // 1. Derive key_0 (and thus id) with a one-time genesis signing
+        // 1. Derive key_0 (and thus id) using the provided genesis message signature
         // Build M0 from group configuration including charter and participant names
-        let genesis_msg = group.config().genesis_message();
+        let genesis_msg = Self::genesis_message(&group);
         let m0 = genesis_msg.as_bytes();
 
-        // FROST: derive key_0 using the group's built-in signing method
-        let sig_0 = group.sign(&m0, signers, &mut OsRng)?;
+        // Verify the provided signature against the genesis message
+        group.verify(&m0, &genesis_message_signature)?;
 
-        // Verify signature
-        assert!(group.verify(&m0, &sig_0).is_ok());
-
-        let key_0 = hkdf_hmac_sha256(&sig_0.serialize()?, &m0, link_len);
+        let key_0 = hkdf_hmac_sha256(
+            &genesis_message_signature.serialize()?,
+            &m0,
+            link_len,
+        );
 
         // id == key_0 (genesis invariant)
         let id = key_0.clone();
 
-        // 2. Precommit for seq=1 (Round-1 only)
-        // Collect SigningCommitments for seq=1 from the chosen quorum
-        // We need to create a temporary chain-like structure for this operation
-        let (commitments_map, nonces_map) =
-            group.round1_commit(signers, &mut OsRng)?;
+        // 2. Use provided precommit data for seq=1
+        // The client has already performed Round-1 commit for the next sequence
+        let commitments_map = seq1_commitments;
+        let nonces_map = seq1_nonces;
 
         // Compute Root_1 = commitments_root(&commitments_map)
         let root_next = commitments_root(&commitments_map);
@@ -182,7 +246,7 @@ impl FrostPmChain {
 
     /// Append the next mark using precommitted Round-1 commitments
     /// This implements the two-ceremony approach: precommit (Round-1) + append (Round-2)
-    /// Takes the receipt and nonces returned from precommit_next_mark
+    /// Takes the receipt returned from precommit_next_mark and the client-generated signature
     /// Returns the new mark and the precommit data for the next round
     pub fn append_mark(
         &mut self,
@@ -190,7 +254,7 @@ impl FrostPmChain {
         date: Date,
         info: Option<impl CBOREncodable>,
         receipt: &PrecommitReceipt,
-        nonces: &BTreeMap<String, SigningNonces>,
+        signature: frost_ed25519::Signature,
     ) -> Result<(
         ProvenanceMark,
         PrecommitReceipt,
@@ -216,53 +280,34 @@ impl FrostPmChain {
             );
         }
 
-        // 2. Use the SAME commitments from the receipt (DO NOT call round1_commit again)
-        let commitments_map = &receipt.commitments;
-
-        // 3. Derive key_seq from the receipt's root (which matches the commitments)
+        // 2. Derive key_seq from the receipt's root (which matches the commitments)
         let key_seq = kdf_next(self.chain_id(), seq, receipt.root, self.res());
 
-        // 4. Verify that this key_seq matches what the previous mark committed to
+        // 3. Verify that this key_seq matches what the previous mark committed to
         if !prev_commitment_matches(&self.last_mark, &key_seq)? {
             bail!(
                 "Chain integrity check failed: key_seq doesn't match previous mark's nextKey"
             );
         }
 
-        // 5. Build message for Round-2 signing (standard PM message format)
-        // Hash the info to create obj_hash for the signing message
-        // If info is provided, serialize it to CBOR and hash it; otherwise use empty bytes
-        let info_bytes = if let Some(ref info_val) = info {
-            info_val.to_cbor_data()
-        } else {
-            Vec::new()
-        };
-        let obj_hash = sha256(&info_bytes);
+        // 4. Build message for Round-2 signing (standard PM message format)
         let message =
-            hash_message(self.chain_id(), seq, date.clone(), &obj_hash);
+            Self::next_mark_message(&self, date.clone(), info.clone());
 
-        // 6. Perform Round-2 using the SAME commitments and provided nonces
-        let signature = self.group.round2_sign(
-            signers,
-            commitments_map,
-            nonces,
-            &message,
-        )?;
-
-        // 7. VERIFY the aggregate signature under the group verifying key
+        // 5. VERIFY the provided signature under the group verifying key
         self.group.verify(&message, &signature)?;
 
-        // 8. BEFORE finalizing this mark's hash, run precommit for seq+1 to get nextKey_seq
+        // 7. BEFORE finalizing this mark's hash, run precommit for seq+1 to get nextKey_seq
         let chain_id = self.chain_id().to_vec();
         let res = self.res();
         let (next_receipt, next_nonces) =
             self.precommit_next_mark(signers, seq + 1, &chain_id, res)?;
         let next_key_seq = kdf_next(&chain_id, seq + 1, next_receipt.root, res);
 
-        // 9. Convert chrono::DateTime to dcbor::Date for ProvenanceMark
+        // 8. Convert chrono::DateTime to dcbor::Date for ProvenanceMark
         let pm_date = dcbor::Date::from_timestamp(date.timestamp() as f64);
 
-        // 10. Use key_seq and next_key_seq to create the mark
+        // 9. Use key_seq and next_key_seq to create the mark
         let mark = ProvenanceMark::new(
             res,
             key_seq,
@@ -273,7 +318,7 @@ impl FrostPmChain {
             info,
         )?;
 
-        // 11. Update state and store the new mark for future verification
+        // 10. Update state and store the new mark for future verification
         self.last_mark = mark.clone();
 
         Ok((mark, next_receipt, next_nonces))

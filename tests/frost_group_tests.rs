@@ -3,11 +3,11 @@ use frost_pm_test::{FrostGroup, FrostGroupConfig};
 
 // Test helper functions
 pub fn corporate_board_config() -> Result<FrostGroupConfig> {
-    FrostGroupConfig::new(3, &["CEO", "CFO", "CTO", "COO", "CLO"])
+    FrostGroupConfig::new(3, &["CEO", "CFO", "CTO", "COO", "CLO"], "Corporate board governance for strategic decisions".to_string())
 }
 
 pub fn family_config() -> Result<FrostGroupConfig> {
-    FrostGroupConfig::new(2, &["Alice", "Bob", "Charlie", "Diana"])
+    FrostGroupConfig::new(2, &["Alice", "Bob", "Charlie", "Diana"], "Family trust fund management".to_string())
 }
 
 #[test]
@@ -24,7 +24,7 @@ fn test_group_creation_with_trusted_dealer() {
 
     // Verify all participants have key packages
     for participant_name in group.participant_names() {
-        assert!(group.key_package(participant_name).is_ok());
+        assert!(group.key_package(&participant_name).is_ok());
     }
 }
 
@@ -41,7 +41,7 @@ fn test_group_signing() {
     let signers: Vec<&str> = participant_names
         .iter()
         .take(group.min_signers() as usize)
-        .copied()
+        .map(|s| s.as_str())
         .collect();
     assert_eq!(signers.len(), 2); // min_signers
 
@@ -65,7 +65,8 @@ fn test_group_insufficient_signers() {
     let message = b"Test message";
 
     // Try to sign with only 1 signer (need 2 for threshold)
-    let insufficient_signers = vec![group.participant_names()[0]];
+    let participant_names = group.participant_names();
+    let insufficient_signers = vec![participant_names[0].as_str()];
 
     let result = group.sign(message, &insufficient_signers, &mut rng);
     assert!(result.is_err());
@@ -90,7 +91,7 @@ fn test_corporate_board_signing() {
     let signers: Vec<&str> = participant_names
         .iter()
         .take(group.min_signers() as usize)
-        .copied()
+        .map(|s| s.as_str())
         .collect();
     assert_eq!(signers.len(), 3);
 
@@ -111,7 +112,7 @@ fn test_group_participant_management() {
 
     // Test that all names are valid
     for name in &participant_names {
-        assert!(["Alice", "Bob", "Eve"].contains(name));
+        assert!(["Alice", "Bob", "Eve"].contains(&name.as_str()));
         assert!(group.has_participant(name));
     }
 
@@ -141,7 +142,7 @@ fn test_group_basic_functionality() {
     let signers: Vec<&str> = participant_names
         .iter()
         .take(group.min_signers() as usize)
-        .copied()
+        .map(|s| s.as_str())
         .collect();
 
     let signature = group.sign(message, &signers, &mut rng).unwrap();

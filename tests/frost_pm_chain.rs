@@ -7,7 +7,7 @@ use rand::rngs::OsRng;
 #[test]
 fn frost_controls_pm_chain() -> Result<()> {
     // Build a 2-of-3 group with usernames ["alice","bob","charlie"]
-    let config = FrostGroupConfig::new(2, &["alice", "bob", "charlie"])?;
+    let config = FrostGroupConfig::new(2, &["alice", "bob", "charlie"], "Provenance mark chain demonstration".to_string())?;
     let group = FrostGroup::new_with_trusted_dealer(config, &mut OsRng)?;
     let res = ProvenanceMarkResolution::Quartile;
 
@@ -85,7 +85,7 @@ fn frost_controls_pm_chain() -> Result<()> {
 
 #[test]
 fn frost_pm_chain_insufficient_signers_fails() -> Result<()> {
-    let config = FrostGroupConfig::new(2, &["alice", "bob", "charlie"])?;
+    let config = FrostGroupConfig::new(2, &["alice", "bob", "charlie"], "Insufficient signers test chain".to_string())?;
     let group = FrostGroup::new_with_trusted_dealer(config, &mut OsRng)?;
     let res = ProvenanceMarkResolution::Medium;
 
@@ -111,7 +111,7 @@ fn frost_pm_chain_insufficient_signers_fails() -> Result<()> {
 
 #[test]
 fn frost_pm_chain_date_monotonicity() -> Result<()> {
-    let config = FrostGroupConfig::new(2, &["alice", "bob", "charlie"])?;
+    let config = FrostGroupConfig::new(2, &["alice", "bob", "charlie"], "Date monotonicity test chain".to_string())?;
     let group = FrostGroup::new_with_trusted_dealer(config, &mut OsRng)?;
     let res = ProvenanceMarkResolution::High;
 
@@ -150,7 +150,7 @@ fn frost_pm_chain_date_monotonicity() -> Result<()> {
 #[test]
 fn frost_pm_different_signer_combinations() -> Result<()> {
     // Test that different valid signer combinations work
-    let config = FrostGroupConfig::new(2, &["alice", "bob", "charlie"])?;
+    let config = FrostGroupConfig::new(2, &["alice", "bob", "charlie"], "Different signer combinations test chain".to_string())?;
     let group = FrostGroup::new_with_trusted_dealer(config, &mut OsRng)?;
     let res = ProvenanceMarkResolution::Low;
 
@@ -187,7 +187,7 @@ fn frost_pm_different_signer_combinations() -> Result<()> {
 
 #[test]
 fn frost_pm_all_resolutions() -> Result<()> {
-    let config = FrostGroupConfig::new(2, &["alice", "bob", "charlie"])?;
+    let config = FrostGroupConfig::new(2, &["alice", "bob", "charlie"], "All resolutions test chain".to_string())?;
     let group = FrostGroup::new_with_trusted_dealer(config, &mut OsRng)?;
 
     let resolutions = [

@@ -17,8 +17,8 @@ pub fn res_code(res: ProvenanceMarkResolution) -> u8 {
 
 pub fn genesis_message(
     res: ProvenanceMarkResolution,
-    min_signers: u16,
-    max_signers: u16,
+    min_signers: usize,
+    max_signers: usize,
     mut ids: Vec<Identifier>,
 ) -> Vec<u8> {
     // Canonical order by serialized bytes:

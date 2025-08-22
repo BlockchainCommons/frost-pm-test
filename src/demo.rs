@@ -18,7 +18,7 @@ pub fn run_demo() -> Result<()> {
     // Create a 2-of-3 FROST group
     println!("1. Creating FROST group with participants: Alice, Bob, Charlie");
     println!("   Threshold: 2 of 3 signers required");
-    let config = FrostGroupConfig::new(2, &["alice", "bob", "charlie"])?;
+    let config = FrostGroupConfig::new(2, &["alice", "bob", "charlie"], "Demo provenance mark chain".to_string())?;
     let group = FrostGroup::new_with_trusted_dealer(config, &mut OsRng)?;
     println!("   ✓ FROST group created successfully\n");
 

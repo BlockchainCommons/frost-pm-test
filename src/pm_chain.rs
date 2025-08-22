@@ -1,7 +1,7 @@
 use crate::{
     FrostGroup,
     kdf::{commitments_root, kdf_next},
-    message::{genesis_message, hash_message},
+    message::hash_message,
 };
 use anyhow::{Result, bail};
 use bc_crypto::{hkdf_hmac_sha256, sha256};
@@ -80,17 +80,12 @@ impl FrostPmChain {
         if signers.len() < group.min_signers() as usize {
             bail!("insufficient signers");
         }
-        let ll = res.link_length();
+        let link_len = res.link_length();
 
         // 1. Derive key_0 (and thus id) with a one-time genesis signing
-        // Build M0 from public group data
-        let participant_names = group.participant_names();
-        let ids: Vec<Identifier> = participant_names
-            .iter()
-            .map(|name| group.name_to_id(name).unwrap())
-            .collect();
-        let m0 =
-            genesis_message(res, group.min_signers(), group.max_signers(), ids);
+        // Build M0 from group configuration including charter and participant names
+        let genesis_msg = group.config().genesis_message();
+        let m0 = genesis_msg.as_bytes();
 
         // FROST: derive key_0 using the group's built-in signing method
         let sig_0 = group.sign(&m0, signers, &mut OsRng)?;
@@ -98,7 +93,7 @@ impl FrostPmChain {
         // Verify signature
         assert!(group.verify(&m0, &sig_0).is_ok());
 
-        let key_0 = hkdf_hmac_sha256(&sig_0.serialize()?, &m0, ll);
+        let key_0 = hkdf_hmac_sha256(&sig_0.serialize()?, &m0, link_len);
 
         // id == key_0 (genesis invariant)
         let id = key_0.clone();

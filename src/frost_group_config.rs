@@ -3,25 +3,27 @@ use frost_ed25519::Identifier;
 use std::collections::BTreeMap;
 
 /// Configuration for the FROST group parameters
+#[derive(Debug, Clone)]
 pub struct FrostGroupConfig {
     /// Minimum number of signers required (threshold)
-    min_signers: u16,
-    /// Maximum number of participants
-    max_signers: u16,
+    min_signers: usize,
     /// Mapping of human-readable names to FROST identifiers
-    participants: BTreeMap<&'static str, Identifier>,
+    participants: BTreeMap<String, Identifier>,
     /// Reverse mapping from FROST identifiers to human-readable names
-    id_to_name: BTreeMap<Identifier, &'static str>,
+    id_to_name: BTreeMap<Identifier, String>,
+    /// Charter describing the purpose of this group
+    charter: String,
 }
 
 impl FrostGroupConfig {
     /// Create a new FROSTGroupConfig with the specified threshold and participant names
     /// The maximum number of signers is automatically derived from the participant names array
     pub fn new(
-        min_signers: u16,
+        min_signers: usize,
         participant_names: &[&'static str],
+        charter: String,
     ) -> Result<Self> {
-        let max_signers = participant_names.len() as u16;
+        let max_signers = participant_names.len();
 
         if min_signers > max_signers {
             bail!(
@@ -40,21 +42,21 @@ impl FrostGroupConfig {
 
         for (i, name) in participant_names.iter().enumerate() {
             let id = Identifier::try_from((i + 1) as u16)?;
-            participants.insert(*name, id);
-            id_to_name.insert(id, *name);
+            participants.insert((*name).to_string(), id);
+            id_to_name.insert(id, (*name).to_string());
         }
 
-        Ok(Self { min_signers, max_signers, participants, id_to_name })
+        Ok(Self { min_signers, participants, id_to_name, charter })
     }
 
     /// Get the minimum number of signers required (threshold)
-    pub fn min_signers(&self) -> u16 {
+    pub fn min_signers(&self) -> usize {
         self.min_signers
     }
 
     /// Get the maximum number of participants
-    pub fn max_signers(&self) -> u16 {
-        self.max_signers
+    pub fn max_signers(&self) -> usize {
+        self.participants.len()
     }
 
     /// Get the list of participant identifiers
@@ -62,9 +64,17 @@ impl FrostGroupConfig {
         self.participants.values().cloned().collect()
     }
 
+    /// Get the group's charter
+    pub fn charter(&self) -> &str {
+        &self.charter
+    }
+
     /// Get participant name by identifier
-    pub fn participant_name(&self, id: &Identifier) -> &'static str {
-        self.id_to_name.get(id).unwrap_or(&"Unknown")
+    pub fn participant_name(&self, id: &Identifier) -> &str {
+        self.id_to_name
+            .get(id)
+            .map(|s| s.as_str())
+            .unwrap_or("Unknown")
     }
 
     /// Get participant names as a comma-separated string
@@ -77,14 +87,27 @@ impl FrostGroupConfig {
     }
 
     /// Get a reference to the participants mapping (for internal use)
-    pub(crate) fn participants(&self) -> &BTreeMap<&'static str, Identifier> {
+    pub(crate) fn participants(&self) -> &BTreeMap<String, Identifier> {
         &self.participants
+    }
+
+    /// Create a genesis message for a new provenance mark chain
+    /// This combines the configuration parameters into a canonical message format
+    pub fn genesis_message(&self) -> String {
+        let participant_names: Vec<String> = self.participants.keys().cloned().collect();
+        format!(
+            "FROST Genesis\nThreshold: {} of {}\nParticipants: {}\nCharter: {}",
+            self.min_signers,
+            participant_names.len(),
+            participant_names.join(", "),
+            self.charter
+        )
     }
 }
 
 impl Default for FrostGroupConfig {
     fn default() -> Self {
-        Self::new(2, &["Alice", "Bob", "Eve"])
+        Self::new(2, &["Alice", "Bob", "Eve"], "Default FROST group for testing".to_string())
             .expect("Default FROSTGroupConfig should be valid")
     }
 }

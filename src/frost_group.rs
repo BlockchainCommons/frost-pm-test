@@ -15,12 +15,8 @@ use crate::frost_group_config::FrostGroupConfig;
 /// This type abstracts away whether keys were generated via trusted dealer or DKG
 #[derive(Debug, Clone)]
 pub struct FrostGroup {
-    /// Minimum number of signers required (threshold)
-    min_signers: u16,
-    /// Maximum number of participants
-    max_signers: u16,
-    /// Mapping of human-readable names to FROST identifiers
-    participants: BTreeMap<&'static str, Identifier>,
+    /// Configuration for the FROST group parameters
+    config: FrostGroupConfig,
     /// Key packages for each participant (contains signing shares)
     key_packages: BTreeMap<Identifier, KeyPackage>,
     /// The group's public key package (for verification and coordination)
@@ -36,8 +32,8 @@ impl FrostGroup {
         // Generate secret shares using trusted dealer
         let (secret_shares, public_key_package) =
             frost::keys::generate_with_dealer(
-                config.max_signers(),
-                config.min_signers(),
+                config.max_signers() as u16,
+                config.min_signers() as u16,
                 frost::keys::IdentifierList::Custom(&config.participant_ids()),
                 rng,
             )?;
@@ -79,33 +75,32 @@ impl FrostGroup {
             }
         }
 
-        Ok(Self {
-            min_signers: config.min_signers(),
-            max_signers: config.max_signers(),
-            participants: config.participants().clone(),
-            key_packages,
-            public_key_package,
-        })
+        Ok(Self { config, key_packages, public_key_package })
     }
 
     /// Get the minimum number of signers required (threshold)
-    pub fn min_signers(&self) -> u16 {
-        self.min_signers
+    pub fn min_signers(&self) -> usize {
+        self.config.min_signers()
     }
 
     /// Get the maximum number of participants
-    pub fn max_signers(&self) -> u16 {
-        self.max_signers
+    pub fn max_signers(&self) -> usize {
+        self.config.max_signers()
     }
 
     /// Check if a participant name exists in this group
     pub fn has_participant(&self, name: &str) -> bool {
-        self.participants.contains_key(name)
+        self.config.participants().contains_key(name)
     }
 
     /// Get the list of all participant names
-    pub fn participant_names(&self) -> Vec<&'static str> {
-        self.participants.keys().cloned().collect()
+    pub fn participant_names(&self) -> Vec<String> {
+        self.config.participants().keys().cloned().collect()
+    }
+
+    /// Get a reference to the group configuration
+    pub fn config(&self) -> &FrostGroupConfig {
+        &self.config
     }
 
     /// Get a reference to a participant's key package by name
@@ -134,10 +129,10 @@ impl FrostGroup {
         signer_names: &[&str],
         rng: &mut (impl RngCore + CryptoRng),
     ) -> Result<Signature> {
-        if signer_names.len() < self.min_signers as usize {
+        if signer_names.len() < self.config.min_signers() {
             bail!(
                 "Need at least {} signers, got {}",
-                self.min_signers,
+                self.config.min_signers(),
                 signer_names.len()
             );
         }
@@ -204,10 +199,10 @@ impl FrostGroup {
         BTreeMap<Identifier, SigningCommitments>,
         BTreeMap<String, SigningNonces>,
     )> {
-        if signer_names.len() < self.min_signers as usize {
+        if signer_names.len() < self.config.min_signers() {
             bail!(
                 "Need at least {} signers, got {}",
-                self.min_signers,
+                self.config.min_signers(),
                 signer_names.len()
             );
         }
@@ -241,10 +236,10 @@ impl FrostGroup {
         nonces_map: &BTreeMap<String, SigningNonces>,
         message: &[u8],
     ) -> Result<Signature> {
-        if signer_names.len() < self.min_signers as usize {
+        if signer_names.len() < self.config.min_signers() {
             bail!(
                 "Need at least {} signers, got {}",
-                self.min_signers,
+                self.config.min_signers(),
                 signer_names.len()
             );
         }
@@ -281,7 +276,8 @@ impl FrostGroup {
 impl FrostGroup {
     /// Convert participant name to identifier
     pub fn name_to_id(&self, name: &str) -> Result<Identifier> {
-        self.participants
+        self.config
+            .participants()
             .get(name)
             .cloned()
             .ok_or_else(|| anyhow!("Unknown participant: {}", name))

@@ -47,13 +47,14 @@ pub fn run_demo() -> Result<()> {
         println!("   Genesis hash: {}", hex::encode(&obj_hash1));
 
         // Genesis
-        let (mut chain, genesis_mark) = FrostPmChain::new_genesis(
-            group.clone(),
-            *res,
-            &["alice", "bob"],
-            Date::now(),
-            Some(artwork_name),
-        )?;
+        let (mut chain, genesis_mark, mut current_receipt, mut current_nonces) =
+            FrostPmChain::new_genesis(
+                group.clone(),
+                *res,
+                &["alice", "bob"],
+                Date::now(),
+                Some(artwork_name),
+            )?;
 
         println!(
             "   ✓ Genesis mark: {} (link: {} bytes)",
@@ -70,11 +71,17 @@ pub fn run_demo() -> Result<()> {
             // Vary the content for each mark
             let content = format!("Edition #{} of collection #{}", seq, i + 1);
 
-            let mark = chain.append_mark(
+            let (mark, new_receipt, new_nonces) = chain.append_mark(
                 &["alice", "bob"], // Same participants for consistency
                 Date::now(),
                 Some(content),
+                &current_receipt,
+                &current_nonces,
             )?;
+
+            // Update for next iteration
+            current_receipt = new_receipt;
+            current_nonces = new_nonces;
 
             all_marks.push(mark);
 

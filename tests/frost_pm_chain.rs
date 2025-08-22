@@ -15,7 +15,7 @@ fn frost_controls_pm_chain() -> Result<()> {
     let image_content = "demo image bytes";
 
     // Genesis from alice+bob
-    let (mut chain, mark0) = FrostPmChain::new_genesis(
+    let (mut chain, mark0, receipt, nonces) = FrostPmChain::new_genesis(
         group.clone(),
         res,
         &["alice", "bob"],
@@ -29,10 +29,12 @@ fn frost_controls_pm_chain() -> Result<()> {
     // Create second mark with a different "image"
     let image2_content = "second image bytes";
 
-    let mark1 = chain.append_mark(
+    let (mark1, receipt, nonces) = chain.append_mark(
         &["alice", "bob"], // Use same participants as genesis precommit
         Date::now(),
         Some(image2_content),
+        &receipt,
+        &nonces,
     )?;
 
     println!("Second mark created: {}", mark1.identifier());
@@ -40,10 +42,12 @@ fn frost_controls_pm_chain() -> Result<()> {
     // Create third mark with yet another "image"
     let image3_content = "third image bytes";
 
-    let mark2 = chain.append_mark(
+    let (mark2, _receipt, _nonces) = chain.append_mark(
         &["alice", "bob"], // Use same participants as mark1 precommit
         Date::now(),
         Some(image3_content),
+        &receipt,
+        &nonces,
     )?;
 
     println!("Third mark created: {}", mark2.identifier());
@@ -112,7 +116,7 @@ fn frost_pm_chain_date_monotonicity() -> Result<()> {
     let res = ProvenanceMarkResolution::High;
 
     let genesis_time = Date::now();
-    let (mut chain, _mark0) = FrostPmChain::new_genesis(
+    let (mut chain, _mark0, receipt, nonces) = FrostPmChain::new_genesis(
         group,
         res,
         &["alice", "bob"],
@@ -128,6 +132,8 @@ fn frost_pm_chain_date_monotonicity() -> Result<()> {
         &["alice", "bob"], // Use same participants as genesis precommit
         earlier_time,
         Some("test content 2"),
+        &receipt,
+        &nonces,
     );
 
     assert!(result.is_err());
@@ -149,7 +155,7 @@ fn frost_pm_different_signer_combinations() -> Result<()> {
     let res = ProvenanceMarkResolution::Low;
 
     // Genesis with alice, bob, charlie
-    let (mut chain, mark0) = FrostPmChain::new_genesis(
+    let (mut chain, mark0, receipt, nonces) = FrostPmChain::new_genesis(
         group.clone(),
         res,
         &["alice", "bob", "charlie"],
@@ -158,10 +164,12 @@ fn frost_pm_different_signer_combinations() -> Result<()> {
     )?;
 
     // Next mark with same participants as genesis precommit
-    let mark1 = chain.append_mark(
+    let (mark1, _receipt, _nonces) = chain.append_mark(
         &["alice", "bob", "charlie"], // Use same participants as genesis precommit
         Date::now(),
         Some("test content 2"),
+        &receipt,
+        &nonces,
     )?;
 
     // Verify both marks are valid and form a proper chain
@@ -198,7 +206,7 @@ fn frost_pm_all_resolutions() -> Result<()> {
         // Test data for this resolution
 
         // Genesis
-        let (mut chain, mark0) = FrostPmChain::new_genesis(
+        let (mut chain, mark0, receipt, nonces) = FrostPmChain::new_genesis(
             group.clone(),
             res,
             &["alice", "bob"],
@@ -218,10 +226,12 @@ fn frost_pm_all_resolutions() -> Result<()> {
         );
 
         // Second mark
-        let mark1 = chain.append_mark(
+        let (mark1, receipt, nonces) = chain.append_mark(
             &["alice", "bob"], // Same participants as genesis precommit
             Date::now(),
             Some("test content 2"),
+            &receipt,
+            &nonces,
         )?;
 
         // Verify chain properties
@@ -236,10 +246,12 @@ fn frost_pm_all_resolutions() -> Result<()> {
         );
 
         // Third mark
-        let mark2 = chain.append_mark(
+        let (mark2, _receipt, _nonces) = chain.append_mark(
             &["alice", "bob"], // Same participants as mark1 precommit
             Date::now(),
             Some("test content 3"),
+            &receipt,
+            &nonces,
         )?;
 
         // Verify chain properties

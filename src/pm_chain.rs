@@ -45,10 +45,6 @@ pub fn prev_commitment_matches(
 pub struct FrostPmChain {
     group: FrostGroup,
     last_mark: ProvenanceMark,
-    // For demo purposes: temporarily store the current precommit receipt
-    // In a real distributed system, participants would manage this locally
-    current_receipt: Option<PrecommitReceipt>,
-    current_nonces: Option<BTreeMap<String, SigningNonces>>,
 }
 
 impl FrostPmChain {
@@ -68,13 +64,19 @@ impl FrostPmChain {
     }
 
     // Create genesis: derive key_0, precommit seq=1, then finalize Mark 0.
+    // Returns the chain, genesis mark, and initial precommit data for seq=1
     pub fn new_genesis(
         group: FrostGroup,
         res: ProvenanceMarkResolution,
         signers: &[&str],
         date: Date,
         info: Option<impl CBOREncodable>,
-    ) -> Result<(Self, ProvenanceMark)> {
+    ) -> Result<(
+        Self,
+        ProvenanceMark,
+        PrecommitReceipt,
+        BTreeMap<String, SigningNonces>,
+    )> {
         if signers.len() < group.min_signers() as usize {
             bail!("insufficient signers");
         }
@@ -135,26 +137,21 @@ impl FrostPmChain {
         )?;
 
         // 4. Create the chain with the genesis mark
-        let chain = Self {
-            group,
-            last_mark: mark0.clone(),
-            current_receipt: Some(receipt1),
-            current_nonces: Some(nonces_map),
-        };
+        let chain = Self { group, last_mark: mark0.clone() };
 
-        Ok((chain, mark0))
+        Ok((chain, mark0, receipt1, nonces_map))
     }
 
     /// Precommit for next mark (Round-1 only)
-    /// Returns a PrecommitReceipt containing the root and commitments (public, non-secret)
-    /// This computes and CONSUMES nextKey_j to finalize the PREVIOUS mark (j-1).
-    fn precommit_next_mark(
+    /// Returns a PrecommitReceipt and nonces for later use in Round-2
+    /// In a real distributed system, participants would manage nonces locally
+    pub fn precommit_next_mark(
         &mut self,
         signers: &[&str],
         next_seq: usize,
         chain_id: &[u8],
         res: ProvenanceMarkResolution,
-    ) -> Result<PrecommitReceipt> {
+    ) -> Result<(PrecommitReceipt, BTreeMap<String, SigningNonces>)> {
         if signers.len() < self.group.min_signers() as usize {
             bail!("insufficient signers for precommit");
         }
@@ -184,21 +181,26 @@ impl FrostPmChain {
             commitments: commitments_map,
         };
 
-        // 5. Store receipt and nonces for the demo (in real systems, participants store nonces locally)
-        self.current_receipt = Some(receipt.clone());
-        self.current_nonces = Some(nonces_map);
-
-        Ok(receipt)
+        // 5. Return both receipt and nonces for the application to manage
+        Ok((receipt, nonces_map))
     }
 
     /// Append the next mark using precommitted Round-1 commitments
     /// This implements the two-ceremony approach: precommit (Round-1) + append (Round-2)
+    /// Takes the receipt and nonces returned from precommit_next_mark
+    /// Returns the new mark and the precommit data for the next round
     pub fn append_mark(
         &mut self,
         signers: &[&str],
         date: Date,
         info: Option<impl CBOREncodable>,
-    ) -> Result<ProvenanceMark> {
+        receipt: &PrecommitReceipt,
+        nonces: &BTreeMap<String, SigningNonces>,
+    ) -> Result<(
+        ProvenanceMark,
+        PrecommitReceipt,
+        BTreeMap<String, SigningNonces>,
+    )> {
         if signers.len() < self.group.min_signers() as usize {
             bail!("insufficient signers");
         }
@@ -210,14 +212,7 @@ impl FrostPmChain {
 
         let seq = self.next_seq();
 
-        // 1. Get the stored receipt and nonces from precommit phase
-        let receipt = self.current_receipt.as_ref().ok_or_else(|| {
-            anyhow::anyhow!("No precommit found for seq {}", seq)
-        })?;
-        let stored_nonces = self.current_nonces.as_ref().ok_or_else(|| {
-            anyhow::anyhow!("No nonces found for seq {}", seq)
-        })?;
-
+        // 1. Validate the provided receipt and nonces
         if receipt.seq != seq {
             bail!(
                 "receipt sequence mismatch: expected {}, got {}",
@@ -251,27 +246,21 @@ impl FrostPmChain {
         let message =
             hash_message(self.chain_id(), seq, date.clone(), &obj_hash);
 
-        // 6. Perform Round-2 using the SAME commitments and stored nonces
+        // 6. Perform Round-2 using the SAME commitments and provided nonces
         let signature = self.group.round2_sign(
             signers,
             commitments_map,
-            stored_nonces,
+            nonces,
             &message,
         )?;
 
         // 7. VERIFY the aggregate signature under the group verifying key
-        self.group
-            .public_key_package()
-            .verifying_key()
-            .verify(&message, &signature)
-            .map_err(|_| {
-                anyhow::anyhow!("FROST aggregate signature verification failed")
-            })?;
+        self.group.verify(&message, &signature)?;
 
         // 8. BEFORE finalizing this mark's hash, run precommit for seq+1 to get nextKey_seq
         let chain_id = self.chain_id().to_vec();
         let res = self.res();
-        let next_receipt =
+        let (next_receipt, next_nonces) =
             self.precommit_next_mark(signers, seq + 1, &chain_id, res)?;
         let next_key_seq = kdf_next(&chain_id, seq + 1, next_receipt.root, res);
 
@@ -292,6 +281,6 @@ impl FrostPmChain {
         // 11. Update state and store the new mark for future verification
         self.last_mark = mark.clone();
 
-        Ok(mark)
+        Ok((mark, next_receipt, next_nonces))
     }
 }

@@ -1,9 +1,7 @@
-use anyhow::Result;
+use anyhow::{Result, bail};
 use bc_crypto::sha256;
 use chrono::Utc;
-use frost_pm_test::{
-    FrostGroup, FrostGroupConfig, pm_chain::FrostPmChain,
-};
+use frost_pm_test::{FrostGroup, FrostGroupConfig, pm_chain::FrostPmChain};
 use provenance_mark::ProvenanceMarkResolution;
 use rand::rngs::OsRng;
 
@@ -20,10 +18,8 @@ pub fn run_demo() -> Result<()> {
     // Create a 2-of-3 FROST group
     println!("1. Creating FROST group with participants: Alice, Bob, Charlie");
     println!("   Threshold: 2 of 3 signers required");
-    let config = FrostGroupConfig::new(2, &["alice", "bob", "charlie"])
-        .map_err(|e| anyhow::anyhow!("Failed to create FROST config: {}", e))?;
-    let group = FrostGroup::new_with_trusted_dealer(config, &mut OsRng)
-        .map_err(|e| anyhow::anyhow!("Failed to create FROST group: {}", e))?;
+    let config = FrostGroupConfig::new(2, &["alice", "bob", "charlie"])?;
+    let group = FrostGroup::new_with_trusted_dealer(config, &mut OsRng)?;
     println!("   ✓ FROST group created successfully\n");
 
     let resolutions = [
@@ -36,7 +32,10 @@ pub fn run_demo() -> Result<()> {
     for (i, (res, name, icon)) in resolutions.iter().enumerate() {
         println!(
             "{} ═══ {} Resolution Demo - {} Mark Chain ({} bytes) ═══",
-            icon, name, MARK_COUNT, res.link_length()
+            icon,
+            name,
+            MARK_COUNT,
+            res.link_length()
         );
 
         // Genesis data
@@ -165,10 +164,7 @@ pub fn run_demo() -> Result<()> {
                 icon, name
             );
         } else {
-            return Err(anyhow::anyhow!(
-                "Chain verification failed for {} resolution",
-                name
-            ));
+            bail!("Chain verification failed for {} resolution", name);
         }
     }
 

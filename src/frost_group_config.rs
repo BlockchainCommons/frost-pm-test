@@ -1,3 +1,4 @@
+use anyhow::{Result, bail};
 use frost_ed25519::Identifier;
 use std::collections::BTreeMap;
 
@@ -19,19 +20,19 @@ impl FrostGroupConfig {
     pub fn new(
         min_signers: u16,
         participant_names: &[&'static str],
-    ) -> Result<Self, Box<dyn std::error::Error>> {
+    ) -> Result<Self> {
         let max_signers = participant_names.len() as u16;
 
         if min_signers > max_signers {
-            return Err(format!(
+            bail!(
                 "min_signers ({}) cannot be greater than max_signers ({})",
-                min_signers, max_signers
-            )
-            .into());
+                min_signers,
+                max_signers
+            );
         }
 
         if min_signers == 0 {
-            return Err("min_signers must be at least 1".into());
+            bail!("min_signers must be at least 1");
         }
 
         let mut participants = BTreeMap::new();

@@ -8,10 +8,8 @@ use rand::rngs::OsRng;
 #[test]
 fn frost_controls_pm_chain() -> Result<()> {
     // Build a 2-of-3 group with usernames ["alice","bob","charlie"]
-    let config = FrostGroupConfig::new(2, &["alice", "bob", "charlie"])
-        .map_err(|e| anyhow::anyhow!("Failed to create FROST config: {}", e))?;
-    let group = FrostGroup::new_with_trusted_dealer(config, &mut OsRng)
-        .map_err(|e| anyhow::anyhow!("Failed to create FROST group: {}", e))?;
+    let config = FrostGroupConfig::new(2, &["alice", "bob", "charlie"])?;
+    let group = FrostGroup::new_with_trusted_dealer(config, &mut OsRng)?;
     let res = ProvenanceMarkResolution::Quartile;
 
     // Fake "image" for genesis
@@ -89,10 +87,8 @@ fn frost_controls_pm_chain() -> Result<()> {
 
 #[test]
 fn frost_pm_chain_insufficient_signers_fails() -> Result<()> {
-    let config = FrostGroupConfig::new(2, &["alice", "bob", "charlie"])
-        .map_err(|e| anyhow::anyhow!("Failed to create FROST config: {}", e))?;
-    let group = FrostGroup::new_with_trusted_dealer(config, &mut OsRng)
-        .map_err(|e| anyhow::anyhow!("Failed to create FROST group: {}", e))?;
+    let config = FrostGroupConfig::new(2, &["alice", "bob", "charlie"])?;
+    let group = FrostGroup::new_with_trusted_dealer(config, &mut OsRng)?;
     let res = ProvenanceMarkResolution::Medium;
     let image = b"test image";
     let obj_hash = sha256(image);
@@ -119,10 +115,8 @@ fn frost_pm_chain_insufficient_signers_fails() -> Result<()> {
 
 #[test]
 fn frost_pm_chain_date_monotonicity() -> Result<()> {
-    let config = FrostGroupConfig::new(2, &["alice", "bob", "charlie"])
-        .map_err(|e| anyhow::anyhow!("Failed to create FROST config: {}", e))?;
-    let group = FrostGroup::new_with_trusted_dealer(config, &mut OsRng)
-        .map_err(|e| anyhow::anyhow!("Failed to create FROST group: {}", e))?;
+    let config = FrostGroupConfig::new(2, &["alice", "bob", "charlie"])?;
+    let group = FrostGroup::new_with_trusted_dealer(config, &mut OsRng)?;
     let res = ProvenanceMarkResolution::High;
     let image = b"genesis image";
     let obj_hash = sha256(image);
@@ -162,10 +156,8 @@ fn frost_pm_chain_date_monotonicity() -> Result<()> {
 #[test]
 fn frost_pm_different_signer_combinations() -> Result<()> {
     // Test that different valid signer combinations work
-    let config = FrostGroupConfig::new(3, &["alice", "bob", "charlie", "dave"])
-        .map_err(|e| anyhow::anyhow!("Failed to create FROST config: {}", e))?;
-    let group = FrostGroup::new_with_trusted_dealer(config, &mut OsRng)
-        .map_err(|e| anyhow::anyhow!("Failed to create FROST group: {}", e))?;
+    let config = FrostGroupConfig::new(2, &["alice", "bob", "charlie"])?;
+    let group = FrostGroup::new_with_trusted_dealer(config, &mut OsRng)?;
     let res = ProvenanceMarkResolution::Low;
 
     let image1 = b"image1";
@@ -206,10 +198,8 @@ fn frost_pm_different_signer_combinations() -> Result<()> {
 
 #[test]
 fn frost_pm_all_resolutions() -> Result<()> {
-    let config = FrostGroupConfig::new(2, &["alice", "bob", "charlie"])
-        .map_err(|e| anyhow::anyhow!("Failed to create FROST config: {}", e))?;
-    let group = FrostGroup::new_with_trusted_dealer(config, &mut OsRng)
-        .map_err(|e| anyhow::anyhow!("Failed to create FROST group: {}", e))?;
+    let config = FrostGroupConfig::new(2, &["alice", "bob", "charlie"])?;
+    let group = FrostGroup::new_with_trusted_dealer(config, &mut OsRng)?;
 
     let resolutions = [
         (ProvenanceMarkResolution::Low, "Low", 4),

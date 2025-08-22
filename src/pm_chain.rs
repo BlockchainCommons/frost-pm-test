@@ -87,10 +87,7 @@ impl<'g> FrostPmChain<'g> {
             genesis_message(res, group.min_signers(), group.max_signers(), ids);
 
         // FROST: derive key_0 using the group's built-in signing method
-        let sig0 =
-            group.sign(&m0, genesis_signers, &mut OsRng).map_err(|e| {
-                anyhow::anyhow!("Failed to sign genesis message: {}", e)
-            })?;
+        let sig0 = group.sign(&m0, genesis_signers, &mut OsRng)?;
         let key0 = hkdf_hmac_sha256(&sig0.serialize()?, &m0, ll);
 
         // id == key0 (genesis invariant)
@@ -151,10 +148,7 @@ impl<'g> FrostPmChain<'g> {
         // Each participant runs round1::commit and retains SigningNonces locally.
         let (commitments_map, nonces_map) = self
             .group
-            .round1_commit(participants, &mut OsRng)
-            .map_err(|e| {
-                anyhow::anyhow!("Failed to collect Round-1 commitments: {}", e)
-            })?;
+            .round1_commit(participants, &mut OsRng)?;
 
         // 2. Compute Root_{seq_next} = commitments_root(&commitments_map)
         let root_next = commitments_root(&commitments_map);
@@ -244,10 +238,7 @@ impl<'g> FrostPmChain<'g> {
         // 6. Perform Round-2 using the SAME commitments and stored nonces
         let _signature = self
             .group
-            .round2_sign(participants, commitments_map, stored_nonces, &message)
-            .map_err(|e| {
-                anyhow::anyhow!("Failed to complete Round-2 signing: {}", e)
-            })?;
+            .round2_sign(participants, commitments_map, stored_nonces, &message)?;
 
         // 7. BEFORE finalizing this mark's hash, run precommit for seq+1 to get nextKey_seq
         let next_receipt = self.precommit_next_mark(participants, seq + 1)?;

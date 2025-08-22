@@ -1,12 +1,13 @@
+use anyhow::Result;
 use frost_ed25519 as frost;
 use frost_pm_test::FrostGroupConfig;
 
 // Test helper functions
-fn corporate_board_config() -> Result<FrostGroupConfig, Box<dyn std::error::Error>> {
+fn corporate_board_config() -> Result<FrostGroupConfig> {
     FrostGroupConfig::new(3, &["CEO", "CFO", "CTO", "COO", "CLO"])
 }
 
-fn family_config() -> Result<FrostGroupConfig, Box<dyn std::error::Error>> {
+fn family_config() -> Result<FrostGroupConfig> {
     FrostGroupConfig::new(2, &["Alice", "Bob", "Charlie", "Diana"])
 }
 

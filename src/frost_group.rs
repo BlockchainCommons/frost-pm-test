@@ -1,3 +1,4 @@
+use anyhow::{Result, anyhow, bail};
 use frost_ed25519 as frost;
 use frost_ed25519::{
     Identifier, Signature, SigningPackage,
@@ -31,7 +32,7 @@ impl FrostGroup {
     pub fn new_with_trusted_dealer(
         config: FrostGroupConfig,
         rng: &mut (impl RngCore + CryptoRng),
-    ) -> Result<Self, Box<dyn std::error::Error>> {
+    ) -> Result<Self> {
         // Generate secret shares using trusted dealer
         let (secret_shares, public_key_package) =
             frost::keys::generate_with_dealer(
@@ -58,25 +59,23 @@ impl FrostGroup {
         config: FrostGroupConfig,
         key_packages: BTreeMap<Identifier, KeyPackage>,
         public_key_package: PublicKeyPackage,
-    ) -> Result<Self, Box<dyn std::error::Error>> {
+    ) -> Result<Self> {
         // Validate that we have key packages for all participants
         if key_packages.len() != config.max_signers() as usize {
-            return Err(format!(
+            bail!(
                 "Expected {} key packages, got {}",
                 config.max_signers(),
                 key_packages.len()
-            )
-            .into());
+            );
         }
 
         // Validate that all participant identifiers have corresponding key packages
         for participant_id in config.participants().values() {
             if !key_packages.contains_key(participant_id) {
-                return Err(format!(
+                bail!(
                     "Missing key package for participant {}",
                     config.participant_name(participant_id)
-                )
-                .into());
+                );
             }
         }
 
@@ -110,14 +109,11 @@ impl FrostGroup {
     }
 
     /// Get a reference to a participant's key package by name
-    pub fn key_package(
-        &self,
-        name: &str,
-    ) -> Result<&KeyPackage, Box<dyn std::error::Error>> {
+    pub fn key_package(&self, name: &str) -> Result<&KeyPackage> {
         let id = self.name_to_id(name)?;
-        self.key_packages.get(&id).ok_or_else(|| {
-            format!("No key package for participant {}", name).into()
-        })
+        self.key_packages
+            .get(&id)
+            .ok_or_else(|| anyhow!("No key package for participant {}", name))
     }
 
     /// Get the public key package for this group
@@ -137,14 +133,13 @@ impl FrostGroup {
         message: &[u8],
         signer_names: &[&str],
         rng: &mut (impl RngCore + CryptoRng),
-    ) -> Result<Signature, Box<dyn std::error::Error>> {
+    ) -> Result<Signature> {
         if signer_names.len() < self.min_signers as usize {
-            return Err(format!(
+            bail!(
                 "Need at least {} signers, got {}",
                 self.min_signers,
                 signer_names.len()
-            )
-            .into());
+            );
         }
 
         // Validate all signer names exist upfront
@@ -194,14 +189,8 @@ impl FrostGroup {
     }
 
     /// Verify a signature against a message using the group's public key
-    pub fn verify(
-        &self,
-        message: &[u8],
-        signature: &Signature,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        self.verifying_key()
-            .verify(message, signature)
-            .map_err(|e| e.into())
+    pub fn verify(&self, message: &[u8], signature: &Signature) -> Result<()> {
+        Ok(self.verifying_key().verify(message, signature)?)
     }
 
     /// Round-1 only: collect commitments for two-ceremony approach
@@ -211,20 +200,16 @@ impl FrostGroup {
         &self,
         signer_names: &[&str],
         rng: &mut (impl RngCore + CryptoRng),
-    ) -> Result<
-        (
-            BTreeMap<Identifier, SigningCommitments>,
-            BTreeMap<String, SigningNonces>,
-        ),
-        Box<dyn std::error::Error>,
-    > {
+    ) -> Result<(
+        BTreeMap<Identifier, SigningCommitments>,
+        BTreeMap<String, SigningNonces>,
+    )> {
         if signer_names.len() < self.min_signers as usize {
-            return Err(format!(
+            bail!(
                 "Need at least {} signers, got {}",
                 self.min_signers,
                 signer_names.len()
-            )
-            .into());
+            );
         }
 
         // Validate all signer names exist upfront
@@ -255,14 +240,13 @@ impl FrostGroup {
         commitments_map: &BTreeMap<Identifier, SigningCommitments>,
         nonces_map: &BTreeMap<String, SigningNonces>,
         message: &[u8],
-    ) -> Result<Signature, Box<dyn std::error::Error>> {
+    ) -> Result<Signature> {
         if signer_names.len() < self.min_signers as usize {
-            return Err(format!(
+            bail!(
                 "Need at least {} signers, got {}",
                 self.min_signers,
                 signer_names.len()
-            )
-            .into());
+            );
         }
 
         // Create signing package from the commitments
@@ -296,14 +280,11 @@ impl FrostGroup {
 
 impl FrostGroup {
     /// Convert participant name to identifier
-    pub fn name_to_id(
-        &self,
-        name: &str,
-    ) -> Result<Identifier, Box<dyn std::error::Error>> {
+    pub fn name_to_id(&self, name: &str) -> Result<Identifier> {
         self.participants
             .get(name)
             .cloned()
-            .ok_or_else(|| format!("Unknown participant: {}", name).into())
+            .ok_or_else(|| anyhow!("Unknown participant: {}", name))
     }
 
     /// Helper method to perform round1 commit for a participant by name
@@ -311,8 +292,7 @@ impl FrostGroup {
         &self,
         participant_name: &str,
         rng: &mut (impl RngCore + CryptoRng),
-    ) -> Result<(SigningNonces, SigningCommitments), Box<dyn std::error::Error>>
-    {
+    ) -> Result<(SigningNonces, SigningCommitments)> {
         let key_package = self.key_package(participant_name)?;
         Ok(frost::round1::commit(key_package.signing_share(), rng))
     }
@@ -323,7 +303,7 @@ impl FrostGroup {
         participant_name: &str,
         signing_package: &SigningPackage,
         nonces: &SigningNonces,
-    ) -> Result<SignatureShare, Box<dyn std::error::Error>> {
+    ) -> Result<SignatureShare> {
         let key_package = self.key_package(participant_name)?;
         Ok(frost::round2::sign(signing_package, nonces, key_package)?)
     }
@@ -334,7 +314,7 @@ impl FrostGroup {
         signer_names: &[&str],
         commitments_by_name: &BTreeMap<String, SigningCommitments>,
         message: &[u8],
-    ) -> Result<SigningPackage, Box<dyn std::error::Error>> {
+    ) -> Result<SigningPackage> {
         let mut frost_commitments_map: BTreeMap<
             Identifier,
             SigningCommitments,
@@ -353,7 +333,7 @@ impl FrostGroup {
         signing_package: &SigningPackage,
         signer_names: &[&str],
         signature_shares_by_name: &BTreeMap<String, SignatureShare>,
-    ) -> Result<Signature, Box<dyn std::error::Error>> {
+    ) -> Result<Signature> {
         let mut frost_signature_shares: BTreeMap<Identifier, SignatureShare> =
             BTreeMap::new();
         for &signer_name in signer_names {

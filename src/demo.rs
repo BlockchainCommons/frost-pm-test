@@ -48,7 +48,7 @@ pub fn run_demo() -> Result<()> {
 
         // Genesis
         let (mut chain, genesis_mark) = FrostPmChain::new_genesis(
-            &group,
+            group.clone(),
             *res,
             &["alice", "bob"],
             Date::now(),

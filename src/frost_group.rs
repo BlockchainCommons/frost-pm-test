@@ -13,7 +13,7 @@ use crate::frost_group_config::FrostGroupConfig;
 
 /// A fully constituted FROST group with all key material needed for signing
 /// This type abstracts away whether keys were generated via trusted dealer or DKG
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FrostGroup {
     /// Minimum number of signers required (threshold)
     min_signers: u16,

@@ -42,8 +42,8 @@ pub fn prev_commitment_matches(
 }
 
 #[derive(Debug)]
-pub struct FrostPmChain<'g> {
-    group: &'g FrostGroup,
+pub struct FrostPmChain {
+    group: FrostGroup,
     last_mark: ProvenanceMark,
     // For demo purposes: temporarily store the current precommit receipt
     // In a real distributed system, participants would manage this locally
@@ -51,7 +51,7 @@ pub struct FrostPmChain<'g> {
     current_nonces: Option<BTreeMap<String, SigningNonces>>,
 }
 
-impl<'g> FrostPmChain<'g> {
+impl FrostPmChain {
     /// Get the resolution from the last mark
     fn res(&self) -> ProvenanceMarkResolution {
         self.last_mark.res()
@@ -69,7 +69,7 @@ impl<'g> FrostPmChain<'g> {
 
     // Create genesis: derive key_0, precommit seq=1, then finalize Mark 0.
     pub fn new_genesis(
-        group: &'g FrostGroup,
+        group: FrostGroup,
         res: ProvenanceMarkResolution,
         signers: &[&str],
         date: Date,

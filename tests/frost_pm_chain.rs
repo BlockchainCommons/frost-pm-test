@@ -16,7 +16,7 @@ fn frost_controls_pm_chain() -> Result<()> {
 
     // Genesis from alice+bob
     let (mut chain, mark0) = FrostPmChain::new_genesis(
-        &group,
+        group.clone(),
         res,
         &["alice", "bob"],
         Date::now(),
@@ -87,7 +87,7 @@ fn frost_pm_chain_insufficient_signers_fails() -> Result<()> {
 
     // Try to create genesis with only 1 signer (threshold is 2)
     let result = FrostPmChain::new_genesis(
-        &group,
+        group,
         res,
         &["alice"], // Only 1 signer, but threshold is 2
         Date::now(),
@@ -113,7 +113,7 @@ fn frost_pm_chain_date_monotonicity() -> Result<()> {
 
     let genesis_time = Date::now();
     let (mut chain, _mark0) = FrostPmChain::new_genesis(
-        &group,
+        group,
         res,
         &["alice", "bob"],
         genesis_time.clone(),
@@ -121,7 +121,9 @@ fn frost_pm_chain_date_monotonicity() -> Result<()> {
     )?;
 
     // Try to create a mark with earlier date than genesis (should fail)
-    let earlier_time = Date::from_datetime(genesis_time.datetime() - chrono::Duration::seconds(60));
+    let earlier_time = Date::from_datetime(
+        genesis_time.datetime() - chrono::Duration::seconds(60),
+    );
     let result = chain.append_mark(
         &["alice", "bob"], // Use same participants as genesis precommit
         earlier_time,
@@ -148,7 +150,7 @@ fn frost_pm_different_signer_combinations() -> Result<()> {
 
     // Genesis with alice, bob, charlie
     let (mut chain, mark0) = FrostPmChain::new_genesis(
-        &group,
+        group.clone(),
         res,
         &["alice", "bob", "charlie"],
         Date::now(),
@@ -197,7 +199,7 @@ fn frost_pm_all_resolutions() -> Result<()> {
 
         // Genesis
         let (mut chain, mark0) = FrostPmChain::new_genesis(
-            &group,
+            group.clone(),
             res,
             &["alice", "bob"],
             Date::now(),

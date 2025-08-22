@@ -204,7 +204,7 @@ impl FROSTGroup {
             .map_err(|e| e.into())
     }
 
-    /// Round-1 only: collect commitments for stateless coordinator
+    /// Round-1 only: collect commitments for two-ceremony approach
     /// Returns a map of Identifier -> SigningCommitments, and stores nonces locally
     /// Participants must keep their SigningNonces until Round-2 completes
     pub fn round1_commit(

@@ -19,7 +19,7 @@ fn frost_controls_pm_chain() -> Result<()> {
     let image = b"demo image bytes";
     let obj_hash = sha256(image);
 
-    // Genesis from alice+bob (stateless approach)
+    // Genesis from alice+bob
     let (mut chain, mark0) = FrostPmChain::new_genesis(
         &group,
         res,
@@ -31,11 +31,11 @@ fn frost_controls_pm_chain() -> Result<()> {
     println!("Genesis mark created: {}", mark0.identifier());
     assert!(mark0.is_genesis());
 
-    // Create second mark with a different "image" (stateless approach)
+    // Create second mark with a different "image"
     let image2 = b"second image bytes";
     let obj_hash2 = sha256(image2);
 
-    let mark1 = chain.append_mark_stateless(
+    let mark1 = chain.append_mark(
         &["alice", "bob"], // Use same participants as genesis precommit
         1,
         Utc::now(),
@@ -44,11 +44,11 @@ fn frost_controls_pm_chain() -> Result<()> {
 
     println!("Second mark created: {}", mark1.identifier());
 
-    // Create third mark with yet another "image" (stateless approach)
+    // Create third mark with yet another "image"
     let image3 = b"third image bytes";
     let obj_hash3 = sha256(image3);
 
-    let mark2 = chain.append_mark_stateless(
+    let mark2 = chain.append_mark(
         &["alice", "bob"], // Use same participants as mark1 precommit
         2,
         Utc::now(),
@@ -142,7 +142,7 @@ fn frost_pm_chain_date_monotonicity() -> Result<()> {
 
     // Try to create a mark with earlier date than genesis (should fail)
     let earlier_time = genesis_time - chrono::Duration::seconds(60);
-    let result = chain.append_mark_stateless(
+    let result = chain.append_mark(
         &["alice", "bob"], // Use same participants as genesis precommit
         1,
         earlier_time,
@@ -172,7 +172,7 @@ fn frost_pm_different_signer_combinations() -> Result<()> {
     let image1 = b"image1";
     let obj_hash1 = sha256(image1);
 
-    // Genesis with alice, bob, charlie (stateless approach)
+    // Genesis with alice, bob, charlie
     let (mut chain, mark0) = FrostPmChain::new_genesis(
         &group,
         res,
@@ -184,8 +184,8 @@ fn frost_pm_different_signer_combinations() -> Result<()> {
     let image2 = b"image2";
     let obj_hash2 = sha256(image2);
 
-    // Next mark with same participants as genesis precommit (stateless approach)
-    let mark1 = chain.append_mark_stateless(
+    // Next mark with same participants as genesis precommit
+    let mark1 = chain.append_mark(
         &["alice", "bob", "charlie"], // Use same participants as genesis precommit
         1,
         Utc::now(),

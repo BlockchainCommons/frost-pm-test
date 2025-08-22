@@ -62,8 +62,7 @@ pub struct FrostPmChain<'g> {
 }
 
 impl<'g> FrostPmChain<'g> {
-    // Create stateless genesis: derive key_0, precommit seq=1, then finalize Mark 0.
-    // This follows the expert's recommended approach for chain integrity
+    // Create genesis: derive key_0, precommit seq=1, then finalize Mark 0.
     pub fn new_genesis(
         group: &'g FROSTGroup,
         res: ProvenanceMarkResolution,
@@ -135,7 +134,7 @@ impl<'g> FrostPmChain<'g> {
         Ok((chain, mark0))
     }
 
-    /// Precommit for next mark (Round-1 only) - implements expert's stateless approach
+    /// Precommit for next mark (Round-1 only)
     /// Returns a PrecommitReceipt containing the root and commitments (public, non-secret)
     /// This computes and CONSUMES nextKey_j to finalize the PREVIOUS mark (j-1).
     pub fn precommit_next_mark(
@@ -184,10 +183,9 @@ impl<'g> FrostPmChain<'g> {
         Ok(receipt)
     }
 
-    /// Append the next mark without any stored nextKey - implements expert's stateless approach
-    /// Uses the SAME commitments from the stored receipt and runs Round-2 to produce mark for seq.
-    /// This is a demo-friendly version that uses temporarily stored nonces.
-    pub fn append_mark_stateless(
+    /// Append the next mark using precommitted Round-1 commitments
+    /// This implements the two-ceremony approach: precommit (Round-1) + append (Round-2)
+    pub fn append_mark(
         &mut self,
         participants: &[&str],
         seq: u32,

@@ -26,7 +26,7 @@ pub fn run_demo() -> Result<()> {
     println!("   Artwork: {:?}", String::from_utf8_lossy(image1));
     println!("   Object hash: {}", hex::encode(&obj_hash1));
 
-    // Genesis: Alice + Bob sign (stateless approach from the start)
+    // Genesis: Alice + Bob sign
     let (mut chain, mark0) = FrostPmChain::new_genesis(
         &group,
         ProvenanceMarkResolution::Quartile,
@@ -47,14 +47,14 @@ pub fn run_demo() -> Result<()> {
     let image2 = b"Derivative work by Bob - 2024";
     let obj_hash2 = sha256(image2);
     println!(
-        "3. Creating second mark for derivative artwork (stateless approach)"
+        "3. Creating second mark for derivative artwork"
     );
     println!("   Artwork: {:?}", String::from_utf8_lossy(image2));
     println!("   Object hash: {}", hex::encode(&obj_hash2));
 
-    // Stateless approach: use the commitments that were already generated during genesis for seq=1
-    // 2) Append this mark — use the SAME commitments from genesis precommit, run Round‑2 for seq=1
-    let mark1 = chain.append_mark_stateless(
+    // Use the commitments that were already generated during genesis for seq=1
+    // Append this mark — use the SAME commitments from genesis precommit, run Round‑2 for seq=1
+    let mark1 = chain.append_mark(
         &["alice", "bob"],
         1,
         Utc::now(),
@@ -69,13 +69,13 @@ pub fn run_demo() -> Result<()> {
     let image3 = b"Collaborative work by Alice, Bob & Charlie - 2024";
     let obj_hash3 = sha256(image3);
     println!(
-        "4. Creating third mark for collaborative artwork (stateless approach)"
+        "4. Creating third mark for collaborative artwork"
     );
     println!("   Artwork: {:?}", String::from_utf8_lossy(image3));
     println!("   Object hash: {}", hex::encode(&obj_hash3));
 
-    // Stateless approach continues: append mark 2 using the same participants as the precommit from mark 1
-    let mark2 = chain.append_mark_stateless(
+    // Append mark 2 using the same participants as the precommit from mark 1
+    let mark2 = chain.append_mark(
         &["alice", "bob"],
         2,
         Utc::now(),
@@ -130,9 +130,6 @@ pub fn run_demo() -> Result<()> {
     println!("   • No single party ever held the master seed or key");
     println!("   • The chain is indistinguishable from a single-signer chain");
     println!("   • All provenance mark invariants are preserved");
-    println!(
-        "   • ✨ STATELESS COORDINATOR: No nextKey stored between generations!"
-    );
     println!(
         "   • Two-ceremony approach: precommit (Round-1) + append (Round-2)"
     );

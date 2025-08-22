@@ -34,7 +34,7 @@ pub fn hkdf_next(
 }
 
 /// Compute a deterministic root over Round-1 commitment map
-/// This follows the expert's recommendation for stateless coordinator design
+/// This provides deterministic key derivation from commitment sets
 pub fn commitments_root(
     commitments: &BTreeMap<Identifier, SigningCommitments>,
 ) -> [u8; 32] {
@@ -57,7 +57,7 @@ pub fn commitments_root(
 }
 
 /// KDF for nextKey / key derivation from commitment root
-/// Domain separation and binding to chain + seq as recommended by expert
+/// Domain separation and binding to chain + seq
 /// Returns the correct length for the given resolution
 pub fn kdf_next(
     chain_id: &[u8],
@@ -75,7 +75,6 @@ pub fn kdf_next(
     hash[..len].to_vec()
 }
 
-/// Alternative name following expert's specification
 pub fn derive_link_from_root(
     res: ProvenanceMarkResolution,
     chain_id: &[u8],

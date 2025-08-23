@@ -87,6 +87,8 @@ impl FrostGroup {
     /// Get the maximum number of participants
     pub fn max_signers(&self) -> usize { self.config.max_signers() }
 
+    pub fn charter(&self) -> &str { self.config.charter() }
+
     /// Check if a participant name exists in this group
     pub fn has_participant(&self, name: &str) -> bool {
         self.config.participants().contains_key(name)

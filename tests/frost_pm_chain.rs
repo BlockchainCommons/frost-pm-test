@@ -51,13 +51,13 @@ fn frost_controls_pm_chain() -> Result<()> {
     let date_1 = Date::now();
 
     // Client generates message and Round-2 signature
-    let message =
+    let message_1 =
         chain.message_next(&date_1, info_1);
     let signature_1 = chain.group().round_2_sign(
         signers,
         &commitments_1,
         &nonces_1,
-        &message,
+        message_1.as_bytes(),
     )?;
 
     // Client generates commitments for seq=2 before calling append_mark
@@ -85,7 +85,7 @@ fn frost_controls_pm_chain() -> Result<()> {
         signers,
         &commitments_2,
         &nonces_2,
-        &message_2,
+        message_2.as_bytes(),
     )?;
 
     // Client generates commitments for seq=3 before calling append_mark
@@ -183,7 +183,7 @@ fn frost_pm_chain_date_monotonicity() -> Result<()> {
         signers,
         &commitments_1,
         &nonces_1,
-        &message_fail,
+        message_fail.as_bytes(),
     )?;
 
     // Generate commitments for the test (even though it will fail)
@@ -259,7 +259,7 @@ fn frost_pm_different_signer_combinations() -> Result<()> {
         signers,
         &commitments_1,
         &nonces_1,
-        &message_1,
+        message_1.as_bytes(),
     )?;
 
     // Generate commitments for next sequence
@@ -362,7 +362,7 @@ fn frost_pm_all_resolutions() -> Result<()> {
             signers,
             &commitments_1,
             &nonces_1,
-            &message_1,
+            message_1.as_bytes(),
         )?;
 
         // Generate commitments for seq=2
@@ -399,7 +399,7 @@ fn frost_pm_all_resolutions() -> Result<()> {
             signers,
             &commitments_2,
             &nonces_2,
-            &message_2,
+            message_2.as_bytes(),
         )?;
 
         // Generate commitments for seq=3

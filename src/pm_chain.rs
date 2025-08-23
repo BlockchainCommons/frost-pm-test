@@ -78,20 +78,24 @@ impl FrostPmChain {
         &self,
         date: &Date,
         info: Option<impl CBOREncodable>,
-    ) -> Vec<u8> {
-        let mut m = Vec::new();
-        m.extend_from_slice(b"DS_HASH\0"); // domain separation
-        m.extend_from_slice(self.chain_id());
-        m.extend_from_slice(&self.next_seq().to_be_bytes());
-        m.extend_from_slice(&(date.to_cbor_data()));
-        let info_bytes = if let Some(ref info_val) = info {
+    ) -> String {
+        let info_data = if let Some(ref info_val) = info {
             info_val.to_cbor_data()
         } else {
             Vec::new()
         };
-        m.extend_from_slice(&(info_bytes.len() as u32).to_be_bytes());
-        m.extend_from_slice(&info_bytes);
-        m
+        let info_hash = hex::encode(sha256(&info_data));
+        format!(
+            "FROST Provenance Mark Chain\nResolution: {}, Threshold: {} of {}\nParticipants: {}\nCharter: {}\nSequence: {}\nDate: {}\nInfo Hash: {}",
+            self.res(),
+            self.group.min_signers(),
+            self.group.max_signers(),
+            self.group.participant_names().join(", "),
+            self.group.charter(),
+            self.next_seq(),
+            date,
+            info_hash
+        )
     }
 
     // Create a new chain with its genesis mark: derive key_0, precommit seq=1,
@@ -182,7 +186,7 @@ impl FrostPmChain {
         let message = Self::message_next(&self, &date, info.clone());
 
         // 5. VERIFY the provided signature under the group verifying key
-        self.group.verify(&message, &message_next_signature)?;
+        self.group.verify(message.as_bytes(), &message_next_signature)?;
 
         // 6. BEFORE finalizing this mark's hash, use provided commitments for
         //    seq+1

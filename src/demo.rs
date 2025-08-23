@@ -109,7 +109,7 @@ pub fn run_demo() -> Result<()> {
                 signers,
                 &current_commitments,
                 &current_nonces,
-                &message,
+                message.as_bytes(),
             )?;
 
             // Generate commitments for next sequence

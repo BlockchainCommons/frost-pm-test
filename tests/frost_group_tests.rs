@@ -3,20 +3,20 @@ use frost_pm_test::{FrostGroup, FrostGroupConfig};
 use rand::rngs::OsRng;
 
 // Test helper functions
-pub fn corporate_board_config() -> Result<FrostGroupConfig> {
+pub fn corporate_board_config() -> FrostGroupConfig {
     FrostGroupConfig::new(
         3,
         &["CEO", "CFO", "CTO", "COO", "CLO"],
         "Corporate board governance for strategic decisions".to_string(),
-    )
+    ).unwrap()
 }
 
-pub fn family_config() -> Result<FrostGroupConfig> {
+pub fn family_config() -> FrostGroupConfig {
     FrostGroupConfig::new(
         2,
         &["Alice", "Bob", "Charlie", "Diana"],
         "Family trust fund management".to_string(),
-    )
+    ).unwrap()
 }
 
 #[test]
@@ -102,7 +102,7 @@ fn test_group_insufficient_signers() -> Result<()> {
 
 #[test]
 fn test_corporate_board_signing() -> Result<()> {
-    let config = corporate_board_config()?;
+    let config = corporate_board_config();
     let group = FrostGroup::new_with_trusted_dealer(config, &mut OsRng)?;
     assert_eq!(group.min_signers(), 3);
     assert_eq!(group.max_signers(), 5);

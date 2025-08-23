@@ -1,6 +1,7 @@
 use anyhow::Result;
 use frost_ed25519 as frost;
 use frost_pm_test::FrostGroupConfig;
+use rand::rngs::OsRng;
 
 // Test helper functions
 fn corporate_board_config() -> Result<FrostGroupConfig> {
@@ -85,7 +86,7 @@ fn test_config_validation() {
 }
 
 #[test]
-fn test_genesis_message_integration_with_pm_chain() {
+fn test_genesis_message_integration_with_pm_chain() -> Result<(), Box<dyn std::error::Error>> {
     use dcbor::Date;
     use frost_pm_test::{FrostGroup, FrostPmChain};
     use provenance_mark::ProvenanceMarkResolution;
@@ -95,38 +96,40 @@ fn test_genesis_message_integration_with_pm_chain() {
         2,
         &["Alice", "Bob", "Charlie"],
         "Test governance charter for integration test".to_string(),
-    )
-    .unwrap();
+    )?;
 
     let res = ProvenanceMarkResolution::Medium;
-    let genesis_msg = FrostPmChain::genesis_message(&config, res);
+    let message_0 = FrostPmChain::genesis_message(&config, res);
 
     let mut rng = rand::thread_rng();
-    let group = FrostGroup::new_with_trusted_dealer(config, &mut rng).unwrap();
+    let group = FrostGroup::new_with_trusted_dealer(config, &mut rng)?;
 
     // Client generates genesis message and signs it
-    let genesis_signature = group
-        .sign(genesis_msg.as_bytes(), &["Alice", "Bob"], &mut rng)
-        .unwrap();
+    let (commitments_0, nonces_0) = group.round_1_commit(&["Alice", "Bob"], &mut OsRng)?;
+    let signature_0 = group.round_2_sign(
+        &["Alice", "Bob"],
+        &commitments_0,
+        &nonces_0,
+        message_0.as_bytes(),
+    )?;
 
     // Client generates Round-1 commitments for seq=1
     let (seq1_commitments, _seq1_nonces) =
-        group.round_1_commit(&["Alice", "Bob"], &mut rng).unwrap();
+        group.round_1_commit(&["Alice", "Bob"], &mut rng)?;
 
     // Create a provenance mark chain - this now takes the pre-signed genesis message and precommit data
     let (_chain, genesis_mark, _receipt, _root_1) = FrostPmChain::new_chain(
         group,
-        genesis_signature,
+        signature_0,
         &seq1_commitments,
         res,
         Date::now(),
         Some("Test genesis content"),
-    )
-    .unwrap();
+    )?;
 
     // Test that the genesis message is accessible through the chain
     let expected_genesis = "FROST Provenance Mark Chain\nResolution: medium, Threshold: 2 of 3\nParticipants: Alice, Bob, Charlie\nCharter: Test governance charter for integration test";
-    assert_eq!(genesis_msg, expected_genesis);
+    assert_eq!(message_0, expected_genesis);
 
     // Verify the genesis mark was created successfully
     assert!(genesis_mark.is_genesis());
@@ -134,10 +137,11 @@ fn test_genesis_message_integration_with_pm_chain() {
 
     // The chain should be properly initialized
     assert_eq!(genesis_mark.chain_id(), genesis_mark.key()); // Genesis invariant
+    Ok(())
 }
 
 #[test]
-fn test_participant_name_lookup() {
+fn test_participant_name_lookup() -> Result<(), Box<dyn std::error::Error>> {
     let config = FrostGroupConfig::default();
     let participant_ids = config.participant_ids();
 
@@ -149,8 +153,9 @@ fn test_participant_name_lookup() {
     }
 
     // Test unknown identifier
-    let unknown_id = frost::Identifier::try_from(99u16).unwrap();
+    let unknown_id = frost::Identifier::try_from(99u16)?;
     assert_eq!(config.participant_name(&unknown_id), "Unknown");
+    Ok(())
 }
 
 #[test]

@@ -96,12 +96,12 @@ impl FrostPmChain {
     // then finalize Mark 0. Returns the chain, genesis mark, and initial
     // precommit data for seq=1
     pub fn new_chain(
-        group: FrostGroup,
-        signature_0: frost_ed25519::Signature,
-        commitments_1: &BTreeMap<Identifier, SigningCommitments>,
         res: ProvenanceMarkResolution,
         date: Date,
         info: Option<impl CBOREncodable>,
+        group: FrostGroup,
+        message_0_signature: frost_ed25519::Signature,
+        commitments_1: &BTreeMap<Identifier, SigningCommitments>,
     ) -> Result<(Self, ProvenanceMark)> {
         let link_len = res.link_length();
 
@@ -113,9 +113,9 @@ impl FrostPmChain {
         let m0 = genesis_msg.as_bytes();
 
         // Verify the provided signature against the genesis message
-        group.verify(&m0, &signature_0)?;
+        group.verify(&m0, &message_0_signature)?;
 
-        let key_0 = hkdf_hmac_sha256(&signature_0.serialize()?, &m0, link_len);
+        let key_0 = hkdf_hmac_sha256(&message_0_signature.serialize()?, &m0, link_len);
 
         // id == key_0 (genesis invariant)
         let id = key_0.clone();

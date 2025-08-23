@@ -68,12 +68,12 @@ pub fn run_demo() -> Result<()> {
         // Genesis
         let (mut chain, mark_0) =
             FrostPmChain::new_chain(
-                group.clone(),
-                signature_0,
-                &commitments_1,
                 *res,
                 Date::now(),
                 Some(artwork_name),
+                group.clone(),
+                signature_0,
+                &commitments_1,
             )?;
 
         // The client keeps the seq1_nonces for the first append_mark

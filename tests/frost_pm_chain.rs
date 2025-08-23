@@ -35,12 +35,12 @@ fn frost_controls_pm_chain() -> Result<()> {
     let date_0 = Date::now();
     let info_0 = None::<String>;
     let (mut chain, mark_0) = FrostPmChain::new_chain(
-        group.clone(),
-        signature_0,
-        &commitments_1,
         res,
         date_0,
         info_0,
+        group.clone(),
+        signature_0,
+        &commitments_1,
     )?;
 
     println!("Genesis mark created: {}", mark_0.identifier());
@@ -161,12 +161,12 @@ fn frost_pm_chain_date_monotonicity() -> Result<()> {
 
     let date_0 = Date::now();
     let (mut chain, _mark_0) = FrostPmChain::new_chain(
-        group,
-        signature_0,
-        &commitments_1,
         res,
         date_0.clone(),
         Some("test content"),
+        group,
+        signature_0,
+        &commitments_1,
     )?;
 
     // Try to create a mark with earlier date than genesis (should fail)
@@ -239,12 +239,12 @@ fn frost_pm_different_signer_combinations() -> Result<()> {
     // Genesis with Alice, Bob, Charlie
     let date_0 = Date::now();
     let (mut chain, mark_0) = FrostPmChain::new_chain(
-        group.clone(),
-        signature_0,
-        &commitments_1,
         res,
         date_0,
         Some("test content 1"),
+        group.clone(),
+        signature_0,
+        &commitments_1,
     )?;
 
     // Next mark with same participants as genesis precommit
@@ -329,12 +329,12 @@ fn frost_pm_all_resolutions() -> Result<()> {
         // Genesis
         let date_0 = Date::now();
         let (mut chain, mark_0) = FrostPmChain::new_chain(
-            group.clone(),
-            signature_0,
-            &commitments_1,
             res,
             date_0,
             Some("test content 1"),
+            group.clone(),
+            signature_0,
+            &commitments_1,
         )?;
 
         // Verify genesis properties

@@ -22,9 +22,7 @@ pub fn family_config() -> Result<FrostGroupConfig> {
 #[test]
 fn test_group_creation_with_trusted_dealer() -> Result<()> {
     let config = FrostGroupConfig::default();
-    let mut rng = rand::thread_rng();
-
-    let group = FrostGroup::new_with_trusted_dealer(config, &mut rng)?;
+    let group = FrostGroup::new_with_trusted_dealer(config, &mut OsRng)?;
 
     assert_eq!(group.min_signers(), 2);
     assert_eq!(group.max_signers(), 3);
@@ -41,9 +39,7 @@ fn test_group_creation_with_trusted_dealer() -> Result<()> {
 #[test]
 fn test_group_signing() -> Result<()> {
     let config = FrostGroupConfig::default();
-    let mut rng = rand::thread_rng();
-
-    let group = FrostGroup::new_with_trusted_dealer(config, &mut rng)?;
+    let group = FrostGroup::new_with_trusted_dealer(config, &mut OsRng)?;
     let message = b"Test message for FROST signing";
 
     // Select signers
@@ -77,9 +73,7 @@ fn test_group_signing() -> Result<()> {
 #[test]
 fn test_group_insufficient_signers() -> Result<()> {
     let config = FrostGroupConfig::default();
-    let mut rng = rand::thread_rng();
-
-    let group = FrostGroup::new_with_trusted_dealer(config, &mut rng)?;
+    let group = FrostGroup::new_with_trusted_dealer(config, &mut OsRng)?;
 
     // Try to sign with only 1 signer (need 2 for threshold)
     let participant_names = group.participant_names();
@@ -97,9 +91,7 @@ fn test_group_insufficient_signers() -> Result<()> {
 #[test]
 fn test_corporate_board_signing() -> Result<()> {
     let config = corporate_board_config()?;
-    let mut rng = rand::thread_rng();
-
-    let group = FrostGroup::new_with_trusted_dealer(config, &mut rng)?;
+    let group = FrostGroup::new_with_trusted_dealer(config, &mut OsRng)?;
     assert_eq!(group.min_signers(), 3);
     assert_eq!(group.max_signers(), 5);
 
@@ -114,7 +106,6 @@ fn test_corporate_board_signing() -> Result<()> {
         .collect();
     assert_eq!(signers.len(), 3);
 
-    // let signature = group.sign(message, &signers, &mut rng)?;
     let (commitments, nonces) = group.round_1_commit(&signers, &mut OsRng)?;
     let signature =
         group.round_2_sign(&signers, &commitments, &nonces, message)?;
@@ -125,9 +116,7 @@ fn test_corporate_board_signing() -> Result<()> {
 #[test]
 fn test_group_participant_management() -> Result<()> {
     let config = FrostGroupConfig::default();
-    let mut rng = rand::thread_rng();
-
-    let group = FrostGroup::new_with_trusted_dealer(config, &mut rng)?;
+    let group = FrostGroup::new_with_trusted_dealer(config, &mut OsRng)?;
 
     // Test participant names retrieval
     let participant_names = group.participant_names();
@@ -149,9 +138,7 @@ fn test_group_participant_management() -> Result<()> {
 fn test_group_basic_functionality() -> Result<()> {
     // Test that demonstrates the basic functionality works
     let config = FrostGroupConfig::default();
-    let mut rng = rand::thread_rng();
-
-    let group = FrostGroup::new_with_trusted_dealer(config, &mut rng)?;
+    let group = FrostGroup::new_with_trusted_dealer(config, &mut OsRng)?;
 
     // Verify basic properties
     assert_eq!(group.min_signers(), 2);

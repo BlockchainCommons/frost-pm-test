@@ -94,13 +94,13 @@ pub fn run_demo() -> Result<()> {
         print!("   Creating marks: ");
         for seq in 1..MARK_COUNT {
             // Vary the content for each mark
-            let info = format!("Edition #{} of collection #{}", seq, i + 1);
+            let info = Some(format!("Edition #{} of collection #{}", seq, i + 1));
             let date = Date::now();
 
             // Client generates message and Round-2 signature
             let message = chain.message_next(
                 &date,
-                Some(info.clone()),
+                info.clone(),
             );
 
             let signers = &["Alice", "Bob"];
@@ -119,7 +119,7 @@ pub fn run_demo() -> Result<()> {
             let mark = chain
                 .append_mark(
                     date,
-                    Some(info),
+                    info,
                     &current_commitments,
                     signature,
                     &next_commitments,

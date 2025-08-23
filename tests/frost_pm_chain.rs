@@ -47,12 +47,12 @@ fn frost_controls_pm_chain() -> Result<()> {
     assert!(mark_0.is_genesis());
 
     // Create second mark with a different "image"
-    let info_1 = "second image bytes";
+    let info_1 = Some("second image bytes");
     let date_1 = Date::now();
 
     // Client generates message and Round-2 signature
     let message =
-        chain.message_next(&date_1, Some(info_1));
+        chain.message_next(&date_1, info_1);
     let signature_1 = chain.group().round_2_sign(
         signers,
         &commitments_1,
@@ -66,7 +66,7 @@ fn frost_controls_pm_chain() -> Result<()> {
 
     let mark_1 = chain.append_mark(
         date_1,
-        Some(info_1),
+        info_1,
         &commitments_1,
         signature_1,
         &commitments_2,
@@ -75,12 +75,12 @@ fn frost_controls_pm_chain() -> Result<()> {
     println!("Mark 1 created: {}", mark_1.identifier());
 
     // Create mark 2 with yet another "image"
-    let info_2 = "mark 2 image bytes";
+    let info_2 = Some("mark 2 image bytes");
     let date_2 = Date::now();
 
     // Client generates message and Round-2 signature
     let message_2 =
-        chain.message_next(&date_2, Some(info_2));
+        chain.message_next(&date_2, info_2);
     let signature_2 = chain.group().round_2_sign(
         signers,
         &commitments_2,
@@ -94,7 +94,7 @@ fn frost_controls_pm_chain() -> Result<()> {
 
     let mark_2 = chain.append_mark(
         date_2,
-        Some(info_2),
+        info_2,
         &commitments_2,
         signature_2,
         &commitments_3,
@@ -160,10 +160,11 @@ fn frost_pm_chain_date_monotonicity() -> Result<()> {
         group.round_1_commit(signers, &mut OsRng)?;
 
     let date_0 = Date::now();
+    let info_0 = Some("test content");
     let (mut chain, _mark_0) = FrostPmChain::new_chain(
         res,
         date_0.clone(),
-        Some("test content"),
+        info_0,
         group,
         signature_0,
         &commitments_1,
@@ -237,10 +238,11 @@ fn frost_pm_different_signer_combinations() -> Result<()> {
 
     // Genesis with Alice, Bob, Charlie
     let date_0 = Date::now();
+    let info_0 = Some("test content 1");
     let (mut chain, mark_0) = FrostPmChain::new_chain(
         res,
         date_0,
-        Some("test content 1"),
+        info_0,
         group.clone(),
         signature_0,
         &commitments_1,
@@ -248,9 +250,10 @@ fn frost_pm_different_signer_combinations() -> Result<()> {
 
     // Next mark with same participants as genesis precommit
     let date_1 = Date::now();
+    let info_1 = Some("test content 2");
     let message_1 = chain.message_next(
         &date_1,
-        Some("test content 2"),
+        info_1,
     );
     let signature_1 = chain.group().round_2_sign(
         signers,
@@ -265,7 +268,7 @@ fn frost_pm_different_signer_combinations() -> Result<()> {
 
     let mark_1 = chain.append_mark(
         date_1,
-        Some("test content 2"),
+        info_1,
         &commitments_1,
         signature_1,
         &commitments_2,

@@ -25,14 +25,10 @@ fn frost_controls_pm_chain() -> Result<()> {
 
     // Client generates Round-1 commitments for seq=1
     let (seq1_commitments, seq1_nonces) =
-        FrostPmChain::generate_round1_commitments(
-            &group,
-            &["alice", "bob"],
-            &mut OsRng,
-        )?;
+        group.round_1_commit(&["alice", "bob"], &mut OsRng)?;
 
     // Genesis from alice+bob
-    let (mut chain, mark0, receipt) = FrostPmChain::new_genesis(
+    let (mut chain, mark_0, receipt) = FrostPmChain::new_chain(
         group.clone(),
         genesis_signature,
         seq1_commitments,
@@ -42,8 +38,8 @@ fn frost_controls_pm_chain() -> Result<()> {
         Some(image_content),
     )?;
 
-    println!("Genesis mark created: {}", mark0.identifier());
-    assert!(mark0.is_genesis());
+    println!("Genesis mark created: {}", mark_0.identifier());
+    assert!(mark_0.is_genesis());
 
     // Create second mark with a different "image"
     let image2_content = "second image bytes";
@@ -55,20 +51,25 @@ fn frost_controls_pm_chain() -> Result<()> {
         mark2_date.clone(),
         Some(image2_content),
     );
-    let signature = FrostPmChain::generate_round2_signature(
-        chain.group(),
+    let signature = chain.group().round_2_sign(
         &["alice", "bob"],
         &receipt.commitments,
         &seq1_nonces,
         &message,
     )?;
 
-    let (mark1, receipt, nonces) = chain.append_mark(
+    // Client generates commitments for seq=2 before calling append_mark
+    let (seq2_commitments, seq2_nonces) = chain
+        .group()
+        .round_1_commit(&["alice", "bob"], &mut OsRng)?;
+
+    let (mark1, receipt) = chain.append_mark(
         &["alice", "bob"], // Use same participants as genesis precommit
         mark2_date,
         Some(image2_content),
         &receipt,
         signature,
+        seq2_commitments,
     )?;
 
     println!("Second mark created: {}", mark1.identifier());
@@ -83,40 +84,45 @@ fn frost_controls_pm_chain() -> Result<()> {
         mark3_date.clone(),
         Some(image3_content),
     );
-    let signature3 = FrostPmChain::generate_round2_signature(
-        chain.group(),
+    let signature3 = chain.group().round_2_sign(
         &["alice", "bob"],
         &receipt.commitments,
-        &nonces,
+        &seq2_nonces,
         &message3,
     )?;
 
-    let (mark2, _receipt, _nonces) = chain.append_mark(
+    // Client generates commitments for seq=3 before calling append_mark
+    let (seq3_commitments, _seq3_nonces) = chain
+        .group()
+        .round_1_commit(&["alice", "bob"], &mut OsRng)?;
+
+    let (mark2, _receipt) = chain.append_mark(
         &["alice", "bob"], // Use same participants as mark1 precommit
         mark3_date,
         Some(image3_content),
         &receipt,
         signature3,
+        seq3_commitments,
     )?;
 
     println!("Third mark created: {}", mark2.identifier());
 
     // Verify the invariants with the PM crate
-    assert!(mark0.is_genesis());
+    assert!(mark_0.is_genesis());
     assert!(provenance_mark::ProvenanceMark::is_sequence_valid(&[
-        mark0.clone(),
+        mark_0.clone(),
         mark1.clone(),
         mark2.clone()
     ]));
-    assert!(mark0.precedes(&mark1));
+    assert!(mark_0.precedes(&mark1));
     assert!(mark1.precedes(&mark2));
 
     println!("All provenance mark chain invariants verified successfully!");
-    println!("Chain ID: {}", hex::encode(mark0.chain_id()));
+    println!("Chain ID: {}", hex::encode(mark_0.chain_id()));
     println!(
         "Mark 0: seq={}, hash={}",
-        mark0.seq(),
-        hex::encode(mark0.hash())
+        mark_0.seq(),
+        hex::encode(mark_0.hash())
     );
     println!(
         "Mark 1: seq={}, hash={}",
@@ -157,14 +163,10 @@ fn frost_pm_chain_insufficient_signers_fails() -> Result<()> {
 
     // We also need valid commitments for the test
     let (seq1_commitments, _seq1_nonces) =
-        FrostPmChain::generate_round1_commitments(
-            &group,
-            &["alice", "bob"],
-            &mut OsRng,
-        )?;
+        group.round_1_commit(&["alice", "bob"], &mut OsRng)?;
 
     // Try to create genesis with only 1 signer in the signers list (threshold validation)
-    let result = FrostPmChain::new_genesis(
+    let result = FrostPmChain::new_chain(
         group,
         valid_signature,
         seq1_commitments,
@@ -202,14 +204,10 @@ fn frost_pm_chain_date_monotonicity() -> Result<()> {
 
     // Client generates Round-1 commitments for seq=1
     let (seq1_commitments, seq1_nonces) =
-        FrostPmChain::generate_round1_commitments(
-            &group,
-            &["alice", "bob"],
-            &mut OsRng,
-        )?;
+        group.round_1_commit(&["alice", "bob"], &mut OsRng)?;
 
     let genesis_time = Date::now();
-    let (mut chain, _mark0, receipt) = FrostPmChain::new_genesis(
+    let (mut chain, _mark_0, receipt) = FrostPmChain::new_chain(
         group,
         genesis_signature,
         seq1_commitments,
@@ -230,13 +228,17 @@ fn frost_pm_chain_date_monotonicity() -> Result<()> {
         earlier_time.clone(),
         Some("test content 2"),
     );
-    let signature_fail = FrostPmChain::generate_round2_signature(
-        chain.group(),
+    let signature_fail = chain.group().round_2_sign(
         &["alice", "bob"],
         &receipt.commitments,
         &seq1_nonces,
         &message_fail,
     )?;
+
+    // Generate commitments for the test (even though it will fail)
+    let (dummy_commitments, _dummy_nonces) = chain
+        .group()
+        .round_1_commit(&["alice", "bob"], &mut OsRng)?;
 
     let result = chain.append_mark(
         &["alice", "bob"], // Use same participants as genesis precommit
@@ -244,6 +246,7 @@ fn frost_pm_chain_date_monotonicity() -> Result<()> {
         Some("test content 2"),
         &receipt,
         signature_fail,
+        dummy_commitments,
     );
 
     assert!(result.is_err());
@@ -278,14 +281,10 @@ fn frost_pm_different_signer_combinations() -> Result<()> {
 
     // Client generates Round-1 commitments for seq=1
     let (seq1_commitments, seq1_nonces) =
-        FrostPmChain::generate_round1_commitments(
-            &group,
-            &["alice", "bob", "charlie"],
-            &mut OsRng,
-        )?;
+        group.round_1_commit(&["alice", "bob", "charlie"], &mut OsRng)?;
 
     // Genesis with alice, bob, charlie
-    let (mut chain, mark0, receipt) = FrostPmChain::new_genesis(
+    let (mut chain, mark_0, receipt) = FrostPmChain::new_chain(
         group.clone(),
         genesis_signature,
         seq1_commitments,
@@ -302,29 +301,34 @@ fn frost_pm_different_signer_combinations() -> Result<()> {
         mark_date.clone(),
         Some("test content 2"),
     );
-    let signature_next = FrostPmChain::generate_round2_signature(
-        chain.group(),
+    let signature_next = chain.group().round_2_sign(
         &["alice", "bob", "charlie"],
         &receipt.commitments,
         &seq1_nonces,
         &message_next,
     )?;
 
-    let (mark1, _receipt, _nonces) = chain.append_mark(
+    // Generate commitments for next sequence
+    let (next_commitments, _next_nonces) = chain
+        .group()
+        .round_1_commit(&["alice", "bob", "charlie"], &mut OsRng)?;
+
+    let (mark1, _receipt) = chain.append_mark(
         &["alice", "bob", "charlie"], // Use same participants as genesis precommit
         mark_date,
         Some("test content 2"),
         &receipt,
         signature_next,
+        next_commitments,
     )?;
 
     // Verify both marks are valid and form a proper chain
-    assert!(mark0.is_genesis());
+    assert!(mark_0.is_genesis());
     assert!(provenance_mark::ProvenanceMark::is_sequence_valid(&[
-        mark0.clone(),
+        mark_0.clone(),
         mark1.clone()
     ]));
-    assert!(mark0.precedes(&mark1));
+    assert!(mark_0.precedes(&mark1));
 
     println!("Different signer combinations test passed!");
 
@@ -365,14 +369,10 @@ fn frost_pm_all_resolutions() -> Result<()> {
 
         // Client generates Round-1 commitments for seq=1
         let (seq1_commitments, seq1_nonces) =
-            FrostPmChain::generate_round1_commitments(
-                &group,
-                &["alice", "bob"],
-                &mut OsRng,
-            )?;
+            group.round_1_commit(&["alice", "bob"], &mut OsRng)?;
 
         // Genesis
-        let (mut chain, mark0, receipt) = FrostPmChain::new_genesis(
+        let (mut chain, mark_0, receipt) = FrostPmChain::new_chain(
             group.clone(),
             genesis_signature,
             seq1_commitments,
@@ -383,14 +383,14 @@ fn frost_pm_all_resolutions() -> Result<()> {
         )?;
 
         // Verify genesis properties
-        assert!(mark0.is_genesis());
-        assert_eq!(mark0.res(), res);
-        assert_eq!(mark0.key().len(), expected_link_len);
-        assert_eq!(mark0.chain_id(), mark0.key()); // Genesis invariant
+        assert!(mark_0.is_genesis());
+        assert_eq!(mark_0.res(), res);
+        assert_eq!(mark_0.key().len(), expected_link_len);
+        assert_eq!(mark_0.chain_id(), mark_0.key()); // Genesis invariant
         println!(
             "  ✓ Genesis mark: {} ({})",
-            mark0.identifier(),
-            mark0.key().len()
+            mark_0.identifier(),
+            mark_0.key().len()
         );
 
         // Second mark
@@ -400,27 +400,32 @@ fn frost_pm_all_resolutions() -> Result<()> {
             mark2_date.clone(),
             Some("test content 2"),
         );
-        let signature2 = FrostPmChain::generate_round2_signature(
-            chain.group(),
+        let signature2 = chain.group().round_2_sign(
             &["alice", "bob"],
             &receipt.commitments,
             &seq1_nonces,
             &message2,
         )?;
 
-        let (mark1, receipt, nonces) = chain.append_mark(
+        // Generate commitments for seq=2
+        let (seq2_commitments, seq2_nonces) = chain
+            .group()
+            .round_1_commit(&["alice", "bob"], &mut OsRng)?;
+
+        let (mark1, receipt) = chain.append_mark(
             &["alice", "bob"], // Same participants as genesis precommit
             mark2_date,
             Some("test content 2"),
             &receipt,
             signature2,
+            seq2_commitments,
         )?;
 
         // Verify chain properties
         assert_eq!(mark1.seq(), 1);
         assert_eq!(mark1.res(), res);
         assert_eq!(mark1.key().len(), expected_link_len);
-        assert_eq!(mark1.chain_id(), mark0.chain_id());
+        assert_eq!(mark1.chain_id(), mark_0.chain_id());
         println!(
             "  ✓ Second mark: {} ({})",
             mark1.identifier(),
@@ -434,27 +439,32 @@ fn frost_pm_all_resolutions() -> Result<()> {
             mark3_date.clone(),
             Some("test content 3"),
         );
-        let signature3 = FrostPmChain::generate_round2_signature(
-            chain.group(),
+        let signature3 = chain.group().round_2_sign(
             &["alice", "bob"],
             &receipt.commitments,
-            &nonces,
+            &seq2_nonces,
             &message3,
         )?;
 
-        let (mark2, _receipt, _nonces) = chain.append_mark(
+        // Generate commitments for seq=3
+        let (seq3_commitments, _seq3_nonces) = chain
+            .group()
+            .round_1_commit(&["alice", "bob"], &mut OsRng)?;
+
+        let (mark2, _receipt) = chain.append_mark(
             &["alice", "bob"], // Same participants as mark1 precommit
             mark3_date,
             Some("test content 3"),
             &receipt,
             signature3,
+            seq3_commitments,
         )?;
 
         // Verify chain properties
         assert_eq!(mark2.seq(), 2);
         assert_eq!(mark2.res(), res);
         assert_eq!(mark2.key().len(), expected_link_len);
-        assert_eq!(mark2.chain_id(), mark0.chain_id());
+        assert_eq!(mark2.chain_id(), mark_0.chain_id());
         println!(
             "  ✓ Third mark: {} ({})",
             mark2.identifier(),
@@ -462,9 +472,9 @@ fn frost_pm_all_resolutions() -> Result<()> {
         );
 
         // Verify complete chain integrity
-        let marks = vec![mark0.clone(), mark1.clone(), mark2.clone()];
+        let marks = vec![mark_0.clone(), mark1.clone(), mark2.clone()];
         assert!(provenance_mark::ProvenanceMark::is_sequence_valid(&marks));
-        assert!(mark0.precedes(&mark1));
+        assert!(mark_0.precedes(&mark1));
         assert!(mark1.precedes(&mark2));
 
         println!("  ✓ Chain integrity verified for {} resolution\n", name);

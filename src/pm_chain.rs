@@ -1,15 +1,9 @@
-use crate::{
-    FrostGroup, FrostGroupConfig,
-    kdf::{commitments_root, kdf_next},
-};
+use crate::{FrostGroup, FrostGroupConfig};
 use anyhow::{Result, bail};
-use bc_crypto::hkdf_hmac_sha256;
+use bc_crypto::{hkdf_hmac_sha256, sha256};
 use dcbor::{CBOREncodable, Date};
-use frost_ed25519::{
-    Identifier, round1::SigningCommitments, round1::SigningNonces,
-};
+use frost_ed25519::{Identifier, round1::SigningCommitments};
 use provenance_mark::{ProvenanceMark, ProvenanceMarkResolution};
-use rand::rngs::OsRng;
 use std::collections::BTreeMap;
 
 /// A public, non-secret receipt from the precommit phase
@@ -103,32 +97,10 @@ impl FrostPmChain {
         m
     }
 
-    /// Generate Round-1 commitments for a group (for client use)
-    pub fn generate_round1_commitments(
-        group: &FrostGroup,
-        signers: &[&str],
-        rng: &mut (impl rand::RngCore + rand::CryptoRng),
-    ) -> Result<(
-        BTreeMap<Identifier, SigningCommitments>,
-        BTreeMap<String, SigningNonces>,
-    )> {
-        group.round1_commit(signers, rng)
-    }
-
-    /// Generate Round-2 signature for a group (for client use)
-    pub fn generate_round2_signature(
-        group: &FrostGroup,
-        signers: &[&str],
-        commitments: &BTreeMap<Identifier, SigningCommitments>,
-        nonces: &BTreeMap<String, SigningNonces>,
-        message: &[u8],
-    ) -> Result<frost_ed25519::Signature> {
-        group.round2_sign(signers, commitments, nonces, message)
-    }
-
-    // Create genesis: derive key_0, precommit seq=1, then finalize Mark 0.
-    // Returns the chain, genesis mark, and initial precommit data for seq=1
-    pub fn new_genesis(
+    // Create a new chain with its genesis mark: derive key_0, precommit seq=1,
+    // then finalize Mark 0. Returns the chain, genesis mark, and initial
+    // precommit data for seq=1
+    pub fn new_chain(
         group: FrostGroup,
         genesis_message_signature: frost_ed25519::Signature,
         commitments_1: BTreeMap<Identifier, SigningCommitments>,
@@ -163,16 +135,10 @@ impl FrostPmChain {
         // The client has already performed Round-1 commit for the next sequence
 
         // Compute Root_1 = commitments_root(&commitments_map)
-        let next_root = commitments_root(&commitments_1);
-
-        let receipt1 = PrecommitReceipt {
-            seq: 1,
-            root: next_root,
-            commitments: commitments_1.clone(),
-        };
+        let root_1 = Self::commitments_root(&commitments_1);
 
         // Compute next_key_0 = derive_link_from_root(res, id, 1, Root_1)
-        let next_key_0 = kdf_next(&id, 1, receipt1.root, res);
+        let next_key_0 = Self::kdf_next(&id, 1, root_1, res);
 
         // 3. Finalize M⟨0⟩ with key_0 and this next_key_0
         let mark_0 = ProvenanceMark::new(
@@ -188,13 +154,19 @@ impl FrostPmChain {
         // 4. Create the chain with the genesis mark
         let chain = Self { group, last_mark: mark_0.clone() };
 
-        Ok((chain, mark_0, receipt1))
+        let receipt_1 = PrecommitReceipt {
+            seq: 1,
+            root: root_1,
+            commitments: commitments_1.clone(),
+        };
+
+        Ok((chain, mark_0, receipt_1))
     }
 
     /// Append the next mark using precommitted Round-1 commitments
     /// This implements the two-ceremony approach: precommit (Round-1) + append (Round-2)
-    /// Takes the receipt returned from precommit_next_mark and the client-generated signature
-    /// Returns the new mark and the precommit data for the next round
+    /// Takes the receipt and the client-generated signature
+    /// Returns the new mark and the precommit receipt for the next round
     pub fn append_mark(
         &mut self,
         signers: &[&str],
@@ -202,11 +174,8 @@ impl FrostPmChain {
         info: Option<impl CBOREncodable>,
         receipt: &PrecommitReceipt,
         signature: frost_ed25519::Signature,
-    ) -> Result<(
-        ProvenanceMark,
-        PrecommitReceipt,
-        BTreeMap<String, SigningNonces>,
-    )> {
+        next_commitments: BTreeMap<Identifier, SigningCommitments>,
+    ) -> Result<(ProvenanceMark, PrecommitReceipt)> {
         if signers.len() < self.group.min_signers() as usize {
             bail!("insufficient signers");
         }
@@ -228,7 +197,8 @@ impl FrostPmChain {
         }
 
         // 2. Derive key from the receipt's root (which matches the commitments)
-        let key = kdf_next(self.chain_id(), seq, receipt.root, self.res());
+        let key =
+            Self::kdf_next(self.chain_id(), seq, receipt.root, self.res());
 
         // 3. Verify that this key matches what the previous mark committed to
         if !prev_commitment_matches(&self.last_mark, &key)? {
@@ -244,23 +214,16 @@ impl FrostPmChain {
         // 5. VERIFY the provided signature under the group verifying key
         self.group.verify(&message, &signature)?;
 
-        // 6. BEFORE finalizing this mark's hash, precommit for seq+1 to get next_key
+        // 6. BEFORE finalizing this mark's hash, use provided commitments for seq+1
         let chain_id = self.chain_id().to_vec();
         let res = self.res();
         let next_seq = seq + 1;
 
-        // Precommit: collect commitments for next_seq
-        let (next_commitments, next_nonces) =
-            self.group.round1_commit(signers, &mut OsRng)?;
-        let next_root = commitments_root(&next_commitments);
+        // Use client-provided commitments for next sequence
+        let next_root = Self::commitments_root(&next_commitments);
 
-        let next_receipt = PrecommitReceipt {
-            seq: next_seq,
-            root: next_root,
-            commitments: next_commitments,
-        };
-
-        let next_key = kdf_next(&chain_id, next_seq, next_receipt.root, res);
+        let next_key =
+            Self::kdf_next(&chain_id, next_seq, next_root, res);
 
         // 7. Use key and next_key to create the mark
         let mark =
@@ -269,6 +232,55 @@ impl FrostPmChain {
         // 8. Store the new mark
         self.last_mark = mark.clone();
 
-        Ok((mark, next_receipt, next_nonces))
+        let next_receipt = PrecommitReceipt {
+            seq: next_seq,
+            root: next_root,
+            commitments: next_commitments,
+        };
+
+        Ok((mark, next_receipt))
+    }
+
+    /// Compute a deterministic root over Round-1 commitment map
+    /// This provides deterministic key derivation from commitment sets
+    fn commitments_root(
+        commitments: &BTreeMap<Identifier, SigningCommitments>,
+    ) -> [u8; 32] {
+        let mut buf = Vec::with_capacity(commitments.len() * 100);
+
+        for (id, sc) in commitments {
+            // Get canonical bytes for identifier and commitments using serde+bincode
+            let id_bytes =
+                bincode::serialize(id).expect("serialize identifier");
+            let sc_bytes =
+                bincode::serialize(sc).expect("serialize signing commitments");
+
+            // Add length prefixes for deterministic parsing
+            buf.extend_from_slice(&(id_bytes.len() as u16).to_be_bytes());
+            buf.extend_from_slice(&id_bytes);
+            buf.extend_from_slice(&(sc_bytes.len() as u16).to_be_bytes());
+            buf.extend_from_slice(&sc_bytes);
+        }
+
+        sha256(&buf)
+    }
+
+    /// KDF for nextKey / key derivation from commitment root
+    /// Domain separation and binding to chain + seq
+    /// Returns the correct length for the given resolution
+    fn kdf_next(
+        chain_id: &[u8],
+        seq: u32,
+        root: [u8; 32],
+        res: ProvenanceMarkResolution,
+    ) -> Vec<u8> {
+        let mut msg = b"PM:v1/next".to_vec();
+        msg.extend_from_slice(chain_id);
+        msg.extend_from_slice(&seq.to_be_bytes());
+        msg.extend_from_slice(&root);
+        let hash = sha256(&msg);
+        // Truncate to the appropriate length for this resolution
+        let len = res.link_length();
+        hash[..len].to_vec()
     }
 }

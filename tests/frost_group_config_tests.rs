@@ -111,15 +111,10 @@ fn test_genesis_message_integration_with_pm_chain() {
 
     // Client generates Round-1 commitments for seq=1
     let (seq1_commitments, _seq1_nonces) =
-        FrostPmChain::generate_round1_commitments(
-            &group,
-            &["Alice", "Bob"],
-            &mut rng,
-        )
-        .unwrap();
+        group.round_1_commit(&["Alice", "Bob"], &mut rng).unwrap();
 
     // Create a provenance mark chain - this now takes the pre-signed genesis message and precommit data
-    let (_chain, genesis_mark, _receipt) = FrostPmChain::new_genesis(
+    let (_chain, genesis_mark, _receipt) = FrostPmChain::new_chain(
         group,
         genesis_signature,
         seq1_commitments,

@@ -14,9 +14,6 @@ and provides a clean, high-level API for threshold signature operations and prov
 
 pub mod frost_group;
 pub mod frost_group_config;
-
-// FROST-controlled provenance mark modules
-pub mod kdf;
 pub mod pm_chain;
 
 pub use frost_group::FrostGroup;

@@ -51,80 +51,79 @@ pub fn run_demo() -> Result<()> {
         println!("   Genesis hash: {}", hex::encode(&obj_hash1));
 
         // Client generates genesis message and signs it
-        let genesis_msg = FrostPmChain::genesis_message(group.config(), *res);
-        let genesis_signature = group.sign(
-            genesis_msg.as_bytes(),
-            &["alice", "bob"],
-            &mut OsRng,
-        )?;
+        let message_0 = FrostPmChain::genesis_message(group.config(), *res);
+        let signature_0 =
+            group.sign(message_0.as_bytes(), &["alice", "bob"], &mut OsRng)?;
 
         // Client generates Round-1 commitments for seq=1
-        let (seq1_commitments, seq1_nonces) =
-            FrostPmChain::generate_round1_commitments(
-                &group,
-                &["alice", "bob"],
-                &mut OsRng,
-            )?;
+        let (commitments_1, nonces_1) =
+            group.round_1_commit(&["alice", "bob"], &mut OsRng)?;
 
         // Genesis
-        let (mut chain, genesis_mark, mut current_receipt) =
-            FrostPmChain::new_genesis(
-                group.clone(),
-                genesis_signature,
-                seq1_commitments,
-                *res,
-                &["alice", "bob"],
-                Date::now(),
-                Some(artwork_name),
-            )?;
+        let (mut chain, mark_0, mut current_receipt) = FrostPmChain::new_chain(
+            group.clone(),
+            signature_0,
+            commitments_1,
+            *res,
+            &["alice", "bob"],
+            Date::now(),
+            Some(artwork_name),
+        )?;
 
         // The client keeps the seq1_nonces for the first append_mark
-        let mut current_nonces = seq1_nonces;
+        let mut current_nonces = nonces_1;
+        let mut current_commitments = current_receipt.commitments.clone();
 
         println!(
             "   ✓ Genesis mark: {} (link: {} bytes)",
-            genesis_mark.identifier(),
-            genesis_mark.key().len()
+            mark_0.identifier(),
+            mark_0.key().len()
         );
-        println!("   Chain ID: {}", hex::encode(genesis_mark.chain_id()));
+        println!("   Chain ID: {}", hex::encode(mark_0.chain_id()));
 
         // Store all marks for final validation
-        let mut all_marks = vec![genesis_mark];
+        let mut all_marks = vec![mark_0];
 
         print!("   Creating marks: ");
         for seq in 1..MARK_COUNT {
             // Vary the content for each mark
             let content = format!("Edition #{} of collection #{}", seq, i + 1);
-            let mark_date = Date::now();
+            let current_date = Date::now();
 
             // Client generates message and Round-2 signature
             let message = FrostPmChain::next_mark_message(
                 &chain,
-                mark_date.clone(),
+                current_date.clone(),
                 Some(content.clone()),
             );
 
             let signers = &["alice", "bob"];
 
-            let signature = FrostPmChain::generate_round2_signature(
-                chain.group(),
+            let signature = chain.group().round_2_sign(
                 signers,
-                &current_receipt.commitments,
+                &current_commitments,
                 &current_nonces,
                 &message,
             )?;
 
-            let (mark, new_receipt, new_nonces) = chain.append_mark(
+            // Generate commitments for next sequence
+            let (next_commitments, new_nonces) =
+                chain.group().round_1_commit(signers, &mut OsRng)?;
+
+            let (mark, new_receipt) = chain.append_mark(
                 signers,
-                mark_date,
+                current_date,
                 Some(content),
                 &current_receipt,
                 signature,
+                next_commitments,
             )?;
+            let next_commitments = new_receipt.commitments.clone();
 
             // Update for next iteration
-            current_receipt = new_receipt;
             current_nonces = new_nonces;
+            current_receipt = new_receipt;
+            current_commitments = next_commitments;
 
             all_marks.push(mark);
 

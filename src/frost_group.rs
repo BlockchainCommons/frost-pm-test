@@ -126,19 +126,19 @@ impl FrostGroup {
     pub fn sign(
         &self,
         message: &[u8],
-        signer_names: &[&str],
+        signers: &[&str],
         rng: &mut (impl RngCore + CryptoRng),
     ) -> Result<Signature> {
-        if signer_names.len() < self.config.min_signers() {
+        if signers.len() < self.config.min_signers() {
             bail!(
                 "Need at least {} signers, got {}",
                 self.config.min_signers(),
-                signer_names.len()
+                signers.len()
             );
         }
 
         // Validate all signer names exist upfront
-        for &signer_name in signer_names {
+        for &signer_name in signers {
             self.key_package(signer_name)?; // This validates the name exists
         }
 
@@ -147,7 +147,7 @@ impl FrostGroup {
         let mut commitments_map: BTreeMap<String, SigningCommitments> =
             BTreeMap::new();
 
-        for &signer_name in signer_names {
+        for &signer_name in signers {
             let (nonces, commitments) =
                 self.commit_for_participant(signer_name, rng)?;
             nonces_map.insert(signer_name.to_string(), nonces);
@@ -155,7 +155,7 @@ impl FrostGroup {
         }
 
         let signing_package = self.create_signing_package(
-            signer_names,
+            signers,
             &commitments_map,
             message,
         )?;
@@ -163,7 +163,7 @@ impl FrostGroup {
         // Round 2: Generate signature shares
         let mut signature_shares: BTreeMap<String, SignatureShare> =
             BTreeMap::new();
-        for &signer_name in signer_names {
+        for &signer_name in signers {
             let nonces = &nonces_map[signer_name];
             let signature_share = self.sign_for_participant(
                 signer_name,
@@ -176,7 +176,7 @@ impl FrostGroup {
         // Aggregate signature
         let group_signature = self.aggregate_signature(
             &signing_package,
-            signer_names,
+            signers,
             &signature_shares,
         )?;
 
@@ -191,24 +191,24 @@ impl FrostGroup {
     /// Round-1 only: collect commitments for two-ceremony approach
     /// Returns a map of Identifier -> SigningCommitments, and stores nonces locally
     /// Participants must keep their SigningNonces until Round-2 completes
-    pub fn round1_commit(
+    pub fn round_1_commit(
         &self,
-        signer_names: &[&str],
+        signers: &[&str],
         rng: &mut (impl RngCore + CryptoRng),
     ) -> Result<(
         BTreeMap<Identifier, SigningCommitments>,
         BTreeMap<String, SigningNonces>,
     )> {
-        if signer_names.len() < self.config.min_signers() {
+        if signers.len() < self.config.min_signers() {
             bail!(
                 "Need at least {} signers, got {}",
                 self.config.min_signers(),
-                signer_names.len()
+                signers.len()
             );
         }
 
         // Validate all signer names exist upfront
-        for &signer_name in signer_names {
+        for &signer_name in signers {
             self.key_package(signer_name)?; // This validates the name exists
         }
 
@@ -216,7 +216,7 @@ impl FrostGroup {
             BTreeMap::new();
         let mut nonces_map: BTreeMap<String, SigningNonces> = BTreeMap::new();
 
-        for &signer_name in signer_names {
+        for &signer_name in signers {
             let (nonces, commitments) =
                 self.commit_for_participant(signer_name, rng)?;
             let signer_id = self.name_to_id(signer_name)?;
@@ -229,18 +229,18 @@ impl FrostGroup {
 
     /// Round-2: replay commitments and perform signing
     /// Requires the same commitments from Round-1 and the nonces kept by participants
-    pub fn round2_sign(
+    pub fn round_2_sign(
         &self,
-        signer_names: &[&str],
+        signers: &[&str],
         commitments_map: &BTreeMap<Identifier, SigningCommitments>,
         nonces_map: &BTreeMap<String, SigningNonces>,
         message: &[u8],
     ) -> Result<Signature> {
-        if signer_names.len() < self.config.min_signers() {
+        if signers.len() < self.config.min_signers() {
             bail!(
                 "Need at least {} signers, got {}",
                 self.config.min_signers(),
-                signer_names.len()
+                signers.len()
             );
         }
 
@@ -251,7 +251,7 @@ impl FrostGroup {
         // Round 2: Generate signature shares
         let mut signature_shares: BTreeMap<Identifier, SignatureShare> =
             BTreeMap::new();
-        for &signer_name in signer_names {
+        for &signer_name in signers {
             let signer_id = self.name_to_id(signer_name)?;
             let nonces = &nonces_map[signer_name];
             let signature_share = self.sign_for_participant(
@@ -307,7 +307,7 @@ impl FrostGroup {
     /// Helper method to create a signing package from signer names and their commitments
     fn create_signing_package(
         &self,
-        signer_names: &[&str],
+        signers: &[&str],
         commitments_by_name: &BTreeMap<String, SigningCommitments>,
         message: &[u8],
     ) -> Result<SigningPackage> {
@@ -315,7 +315,7 @@ impl FrostGroup {
             Identifier,
             SigningCommitments,
         > = BTreeMap::new();
-        for &signer_name in signer_names {
+        for &signer_name in signers {
             let signer_id = self.name_to_id(signer_name)?;
             let commitments = &commitments_by_name[signer_name];
             frost_commitments_map.insert(signer_id, commitments.clone());
@@ -327,12 +327,12 @@ impl FrostGroup {
     fn aggregate_signature(
         &self,
         signing_package: &SigningPackage,
-        signer_names: &[&str],
+        signers: &[&str],
         signature_shares_by_name: &BTreeMap<String, SignatureShare>,
     ) -> Result<Signature> {
         let mut frost_signature_shares: BTreeMap<Identifier, SignatureShare> =
             BTreeMap::new();
-        for &signer_name in signer_names {
+        for &signer_name in signers {
             let signer_id = self.name_to_id(signer_name)?;
             let signature_share = &signature_shares_by_name[signer_name];
             frost_signature_shares.insert(signer_id, signature_share.clone());

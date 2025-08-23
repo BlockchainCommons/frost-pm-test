@@ -28,7 +28,7 @@ fn frost_controls_pm_chain() -> Result<()> {
         group.round_1_commit(&["alice", "bob"], &mut OsRng)?;
 
     // Genesis from alice+bob
-    let (mut chain, mark_0, receipt) = FrostPmChain::new_chain(
+    let (mut chain, mark_0, receipt, receipt_commitments) = FrostPmChain::new_chain(
         group.clone(),
         genesis_signature,
         seq1_commitments,
@@ -53,7 +53,7 @@ fn frost_controls_pm_chain() -> Result<()> {
     );
     let signature = chain.group().round_2_sign(
         &["alice", "bob"],
-        &receipt.commitments,
+        &receipt_commitments,
         &seq1_nonces,
         &message,
     )?;
@@ -63,7 +63,7 @@ fn frost_controls_pm_chain() -> Result<()> {
         .group()
         .round_1_commit(&["alice", "bob"], &mut OsRng)?;
 
-    let (mark1, receipt) = chain.append_mark(
+    let (mark1, receipt, receipt_commitments) = chain.append_mark(
         &["alice", "bob"], // Use same participants as genesis precommit
         mark2_date,
         Some(image2_content),
@@ -86,7 +86,7 @@ fn frost_controls_pm_chain() -> Result<()> {
     );
     let signature3 = chain.group().round_2_sign(
         &["alice", "bob"],
-        &receipt.commitments,
+        &receipt_commitments,
         &seq2_nonces,
         &message3,
     )?;
@@ -96,7 +96,7 @@ fn frost_controls_pm_chain() -> Result<()> {
         .group()
         .round_1_commit(&["alice", "bob"], &mut OsRng)?;
 
-    let (mark2, _receipt) = chain.append_mark(
+    let (mark2, _receipt, _receipt_commitments) = chain.append_mark(
         &["alice", "bob"], // Use same participants as mark1 precommit
         mark3_date,
         Some(image3_content),
@@ -207,7 +207,7 @@ fn frost_pm_chain_date_monotonicity() -> Result<()> {
         group.round_1_commit(&["alice", "bob"], &mut OsRng)?;
 
     let genesis_time = Date::now();
-    let (mut chain, _mark_0, receipt) = FrostPmChain::new_chain(
+    let (mut chain, _mark_0, receipt, receipt_commitments) = FrostPmChain::new_chain(
         group,
         genesis_signature,
         seq1_commitments,
@@ -230,7 +230,7 @@ fn frost_pm_chain_date_monotonicity() -> Result<()> {
     );
     let signature_fail = chain.group().round_2_sign(
         &["alice", "bob"],
-        &receipt.commitments,
+        &receipt_commitments,
         &seq1_nonces,
         &message_fail,
     )?;
@@ -284,7 +284,7 @@ fn frost_pm_different_signer_combinations() -> Result<()> {
         group.round_1_commit(&["alice", "bob", "charlie"], &mut OsRng)?;
 
     // Genesis with alice, bob, charlie
-    let (mut chain, mark_0, receipt) = FrostPmChain::new_chain(
+    let (mut chain, mark_0, receipt, receipt_commitments) = FrostPmChain::new_chain(
         group.clone(),
         genesis_signature,
         seq1_commitments,
@@ -303,7 +303,7 @@ fn frost_pm_different_signer_combinations() -> Result<()> {
     );
     let signature_next = chain.group().round_2_sign(
         &["alice", "bob", "charlie"],
-        &receipt.commitments,
+        &receipt_commitments,
         &seq1_nonces,
         &message_next,
     )?;
@@ -313,7 +313,7 @@ fn frost_pm_different_signer_combinations() -> Result<()> {
         .group()
         .round_1_commit(&["alice", "bob", "charlie"], &mut OsRng)?;
 
-    let (mark1, _receipt) = chain.append_mark(
+    let (mark1, _receipt, _receipt_commitments) = chain.append_mark(
         &["alice", "bob", "charlie"], // Use same participants as genesis precommit
         mark_date,
         Some("test content 2"),
@@ -372,7 +372,7 @@ fn frost_pm_all_resolutions() -> Result<()> {
             group.round_1_commit(&["alice", "bob"], &mut OsRng)?;
 
         // Genesis
-        let (mut chain, mark_0, receipt) = FrostPmChain::new_chain(
+        let (mut chain, mark_0, receipt, receipt_commitments) = FrostPmChain::new_chain(
             group.clone(),
             genesis_signature,
             seq1_commitments,
@@ -402,7 +402,7 @@ fn frost_pm_all_resolutions() -> Result<()> {
         );
         let signature2 = chain.group().round_2_sign(
             &["alice", "bob"],
-            &receipt.commitments,
+            &receipt_commitments,
             &seq1_nonces,
             &message2,
         )?;
@@ -412,7 +412,7 @@ fn frost_pm_all_resolutions() -> Result<()> {
             .group()
             .round_1_commit(&["alice", "bob"], &mut OsRng)?;
 
-        let (mark1, receipt) = chain.append_mark(
+        let (mark1, receipt, receipt_commitments) = chain.append_mark(
             &["alice", "bob"], // Same participants as genesis precommit
             mark2_date,
             Some("test content 2"),
@@ -441,7 +441,7 @@ fn frost_pm_all_resolutions() -> Result<()> {
         );
         let signature3 = chain.group().round_2_sign(
             &["alice", "bob"],
-            &receipt.commitments,
+            &receipt_commitments,
             &seq2_nonces,
             &message3,
         )?;
@@ -451,7 +451,7 @@ fn frost_pm_all_resolutions() -> Result<()> {
             .group()
             .round_1_commit(&["alice", "bob"], &mut OsRng)?;
 
-        let (mark2, _receipt) = chain.append_mark(
+        let (mark2, _receipt, _receipt_commitments) = chain.append_mark(
             &["alice", "bob"], // Same participants as mark1 precommit
             mark3_date,
             Some("test content 3"),

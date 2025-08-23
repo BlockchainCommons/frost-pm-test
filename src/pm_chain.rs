@@ -12,7 +12,6 @@ use std::collections::BTreeMap;
 pub struct PrecommitReceipt {
     pub seq: u32,
     pub root: [u8; 32],
-    pub commitments: BTreeMap<Identifier, SigningCommitments>,
 }
 
 /// Check if the candidate nextKey matches what the previous mark committed to
@@ -108,7 +107,7 @@ impl FrostPmChain {
         signers: &[&str],
         date: Date,
         info: Option<impl CBOREncodable>,
-    ) -> Result<(Self, ProvenanceMark, PrecommitReceipt)> {
+    ) -> Result<(Self, ProvenanceMark, PrecommitReceipt, BTreeMap<Identifier, SigningCommitments>)> {
         if signers.len() < group.min_signers() as usize {
             bail!("insufficient signers");
         }
@@ -157,10 +156,9 @@ impl FrostPmChain {
         let receipt_1 = PrecommitReceipt {
             seq: 1,
             root: root_1,
-            commitments: commitments_1.clone(),
         };
 
-        Ok((chain, mark_0, receipt_1))
+        Ok((chain, mark_0, receipt_1, commitments_1))
     }
 
     /// Append the next mark using precommitted Round-1 commitments
@@ -175,7 +173,7 @@ impl FrostPmChain {
         receipt: &PrecommitReceipt,
         signature: frost_ed25519::Signature,
         next_commitments: BTreeMap<Identifier, SigningCommitments>,
-    ) -> Result<(ProvenanceMark, PrecommitReceipt)> {
+    ) -> Result<(ProvenanceMark, PrecommitReceipt, BTreeMap<Identifier, SigningCommitments>)> {
         if signers.len() < self.group.min_signers() as usize {
             bail!("insufficient signers");
         }
@@ -235,10 +233,9 @@ impl FrostPmChain {
         let next_receipt = PrecommitReceipt {
             seq: next_seq,
             root: next_root,
-            commitments: next_commitments,
         };
 
-        Ok((mark, next_receipt))
+        Ok((mark, next_receipt, next_commitments))
     }
 
     /// Compute a deterministic root over Round-1 commitment map

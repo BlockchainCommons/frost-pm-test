@@ -35,7 +35,7 @@ fn frost_controls_pm_chain() -> Result<()> {
         group.round_1_commit(signers, &mut OsRng)?;
 
     // Genesis from Alice+Bob
-    let (mut chain, mark_0, receipt, root_1) = FrostPmChain::new_chain(
+    let (mut chain, mark_0, root_1) = FrostPmChain::new_chain(
         group.clone(),
         signature_0,
         &commitments_1,
@@ -68,11 +68,10 @@ fn frost_controls_pm_chain() -> Result<()> {
     let (commitments_2, nonces_2) =
         chain.group().round_1_commit(signers, &mut OsRng)?;
 
-    let (mark_1, receipt, receipt_root, receipt_commitments) = chain
+    let (mark_1, receipt_root, receipt_commitments) = chain
         .append_mark(
             date_2,
             Some(content_2),
-            &receipt,
             Some(root_1),
             signature,
             commitments_2,
@@ -101,11 +100,10 @@ fn frost_controls_pm_chain() -> Result<()> {
     let (commitments_3, _nonces_3) =
         chain.group().round_1_commit(signers, &mut OsRng)?;
 
-    let (mark_2, _receipt, _receipt_root, _receipt_commitments) = chain
+    let (mark_2, _receipt_root, _receipt_commitments) = chain
         .append_mark(
             date_3,
             Some(content_3),
-            &receipt,
             Some(receipt_root),
             signature_3,
             commitments_3,
@@ -171,7 +169,7 @@ fn frost_pm_chain_date_monotonicity() -> Result<()> {
         group.round_1_commit(signers, &mut OsRng)?;
 
     let date_0 = Date::now();
-    let (mut chain, _mark_0, receipt, root_1) = FrostPmChain::new_chain(
+    let (mut chain, _mark_0, root_1) = FrostPmChain::new_chain(
         group,
         signature_0,
         &commitments_1,
@@ -204,7 +202,6 @@ fn frost_pm_chain_date_monotonicity() -> Result<()> {
     let result = chain.append_mark(
         earlier_time,
         Some("test content 2"),
-        &receipt,
         Some(root_1),
         signature_fail,
         dummy_commitments,
@@ -250,7 +247,7 @@ fn frost_pm_different_signer_combinations() -> Result<()> {
 
     // Genesis with Alice, Bob, Charlie
     let date_0 = Date::now();
-    let (mut chain, mark_0, receipt, root_1) = FrostPmChain::new_chain(
+    let (mut chain, mark_0, root_1) = FrostPmChain::new_chain(
         group.clone(),
         signature_0,
         &commitments_1,
@@ -277,11 +274,10 @@ fn frost_pm_different_signer_combinations() -> Result<()> {
     let (commitments_2, _nonces_2) =
         chain.group().round_1_commit(signers, &mut OsRng)?;
 
-    let (mark_1, _receipt, _receipt_root, _receipt_commitments) = chain
+    let (mark_1, _receipt_root, _receipt_commitments) = chain
         .append_mark(
             date_1,
             Some("test content 2"),
-            &receipt,
             Some(root_1),
             signature_1,
             commitments_2,
@@ -342,7 +338,7 @@ fn frost_pm_all_resolutions() -> Result<()> {
 
         // Genesis
         let date_0 = Date::now();
-        let (mut chain, mark_0, receipt, root_1) = FrostPmChain::new_chain(
+        let (mut chain, mark_0, root_1) = FrostPmChain::new_chain(
             group.clone(),
             signature_0,
             &commitments_1,
@@ -381,11 +377,10 @@ fn frost_pm_all_resolutions() -> Result<()> {
         let (seq2_commitments, seq2_nonces) =
             chain.group().round_1_commit(signers, &mut OsRng)?;
 
-        let (mark_1, receipt, receipt_root, receipt_commitments) = chain
+        let (mark_1, receipt_root, receipt_commitments) = chain
             .append_mark(
                 date_1,
                 Some("test content 2"),
-                &receipt,
                 Some(root_1),
                 signature_1,
                 seq2_commitments,
@@ -420,11 +415,10 @@ fn frost_pm_all_resolutions() -> Result<()> {
         let (seq3_commitments, _seq3_nonces) =
             chain.group().round_1_commit(signers, &mut OsRng)?;
 
-        let (mark_2, _receipt, _receipt_root, _receipt_commitments) = chain
+        let (mark_2, _receipt_root, _receipt_commitments) = chain
             .append_mark(
                 date_2,
                 Some("test content 3"),
-                &receipt,
                 Some(receipt_root),
                 signature_2,
                 seq3_commitments,

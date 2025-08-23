@@ -8,13 +8,6 @@ use provenance_mark::{ProvenanceMark, ProvenanceMarkResolution};
 
 use crate::{FrostGroup, FrostGroupConfig};
 
-/// A public, non-secret receipt from the precommit phase
-/// Contains the commitment root and roster used in the session
-#[derive(Clone, Debug)]
-pub struct PrecommitReceipt {
-    pub seq: u32,
-}
-
 /// Check if the candidate nextKey matches what the previous mark committed to
 /// This is done by recomputing the previous mark's hash with the candidate
 /// nextKey
@@ -101,7 +94,7 @@ impl FrostPmChain {
         res: ProvenanceMarkResolution,
         date: Date,
         info: Option<impl CBOREncodable>,
-    ) -> Result<(Self, ProvenanceMark, PrecommitReceipt, [u8; 32])> {
+    ) -> Result<(Self, ProvenanceMark, [u8; 32])> {
         let link_len = res.link_length();
 
         // 1. Derive key_0 (and thus id) using the provided genesis message
@@ -142,9 +135,7 @@ impl FrostPmChain {
         // 4. Create the chain with the genesis mark
         let chain = Self { group, last_mark: mark_0.clone() };
 
-        let receipt_1 = PrecommitReceipt { seq: 1 };
-
-        Ok((chain, mark_0, receipt_1, root_1))
+        Ok((chain, mark_0, root_1))
     }
 
     /// Append the next mark using precommitted Round-1 commitments
@@ -155,13 +146,11 @@ impl FrostPmChain {
         &mut self,
         date: Date,
         info: Option<impl CBOREncodable>,
-        receipt: &PrecommitReceipt,
         receipt_root: Option<[u8; 32]>,
         signature: frost_ed25519::Signature,
         next_commitments: BTreeMap<Identifier, SigningCommitments>,
     ) -> Result<(
         ProvenanceMark,
-        PrecommitReceipt,
         [u8; 32],
         BTreeMap<Identifier, SigningCommitments>,
     )> {
@@ -171,16 +160,6 @@ impl FrostPmChain {
         }
 
         let seq = self.next_seq();
-
-        // 1. Validate the provided receipt and nonces
-        if receipt.seq != seq {
-            bail!(
-                "receipt sequence mismatch: expected {}, got {}",
-                seq,
-                receipt.seq
-            );
-        }
-
         let root = receipt_root.unwrap();
 
         // 2. Derive key from the receipt's root (which matches the commitments)
@@ -218,9 +197,7 @@ impl FrostPmChain {
         // 8. Store the new mark
         self.last_mark = mark.clone();
 
-        let next_receipt = PrecommitReceipt { seq: next_seq };
-
-        Ok((mark, next_receipt, next_root, next_commitments))
+        Ok((mark, next_root, next_commitments))
     }
 
     /// Compute a deterministic root over Round-1 commitment map

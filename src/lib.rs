@@ -18,4 +18,4 @@ pub mod pm_chain;
 
 pub use frost_group::FrostGroup;
 pub use frost_group_config::FrostGroupConfig;
-pub use pm_chain::{FrostPmChain, PrecommitReceipt};
+pub use pm_chain::FrostPmChain;

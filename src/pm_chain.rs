@@ -102,12 +102,12 @@ impl FrostPmChain {
     pub fn new_chain(
         group: FrostGroup,
         genesis_message_signature: frost_ed25519::Signature,
-        commitments_1: BTreeMap<Identifier, SigningCommitments>,
+        commitments_1: &BTreeMap<Identifier, SigningCommitments>,
         res: ProvenanceMarkResolution,
         signers: &[&str],
         date: Date,
         info: Option<impl CBOREncodable>,
-    ) -> Result<(Self, ProvenanceMark, PrecommitReceipt, BTreeMap<Identifier, SigningCommitments>)> {
+    ) -> Result<(Self, ProvenanceMark, PrecommitReceipt)> {
         if signers.len() < group.min_signers() as usize {
             bail!("insufficient signers");
         }
@@ -158,7 +158,7 @@ impl FrostPmChain {
             root: root_1,
         };
 
-        Ok((chain, mark_0, receipt_1, commitments_1))
+        Ok((chain, mark_0, receipt_1))
     }
 
     /// Append the next mark using precommitted Round-1 commitments

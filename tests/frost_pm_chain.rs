@@ -28,10 +28,10 @@ fn frost_controls_pm_chain() -> Result<()> {
         group.round_1_commit(&["alice", "bob"], &mut OsRng)?;
 
     // Genesis from alice+bob
-    let (mut chain, mark_0, receipt, receipt_commitments) = FrostPmChain::new_chain(
+    let (mut chain, mark_0, receipt) = FrostPmChain::new_chain(
         group.clone(),
         genesis_signature,
-        seq1_commitments,
+        &seq1_commitments,
         res,
         &["alice", "bob"],
         Date::now(),
@@ -53,7 +53,7 @@ fn frost_controls_pm_chain() -> Result<()> {
     );
     let signature = chain.group().round_2_sign(
         &["alice", "bob"],
-        &receipt_commitments,
+        &seq1_commitments,
         &seq1_nonces,
         &message,
     )?;
@@ -169,7 +169,7 @@ fn frost_pm_chain_insufficient_signers_fails() -> Result<()> {
     let result = FrostPmChain::new_chain(
         group,
         valid_signature,
-        seq1_commitments,
+        &seq1_commitments,
         res,
         &["alice"], // Only 1 signer, but threshold is 2
         Date::now(),
@@ -207,10 +207,10 @@ fn frost_pm_chain_date_monotonicity() -> Result<()> {
         group.round_1_commit(&["alice", "bob"], &mut OsRng)?;
 
     let genesis_time = Date::now();
-    let (mut chain, _mark_0, receipt, receipt_commitments) = FrostPmChain::new_chain(
+    let (mut chain, _mark_0, receipt) = FrostPmChain::new_chain(
         group,
         genesis_signature,
-        seq1_commitments,
+        &seq1_commitments,
         res,
         &["alice", "bob"],
         genesis_time.clone(),
@@ -230,7 +230,7 @@ fn frost_pm_chain_date_monotonicity() -> Result<()> {
     );
     let signature_fail = chain.group().round_2_sign(
         &["alice", "bob"],
-        &receipt_commitments,
+        &seq1_commitments,
         &seq1_nonces,
         &message_fail,
     )?;
@@ -284,10 +284,10 @@ fn frost_pm_different_signer_combinations() -> Result<()> {
         group.round_1_commit(&["alice", "bob", "charlie"], &mut OsRng)?;
 
     // Genesis with alice, bob, charlie
-    let (mut chain, mark_0, receipt, receipt_commitments) = FrostPmChain::new_chain(
+    let (mut chain, mark_0, receipt) = FrostPmChain::new_chain(
         group.clone(),
         genesis_signature,
-        seq1_commitments,
+        &seq1_commitments,
         res,
         &["alice", "bob", "charlie"],
         Date::now(),
@@ -303,7 +303,7 @@ fn frost_pm_different_signer_combinations() -> Result<()> {
     );
     let signature_next = chain.group().round_2_sign(
         &["alice", "bob", "charlie"],
-        &receipt_commitments,
+        &seq1_commitments,
         &seq1_nonces,
         &message_next,
     )?;
@@ -372,10 +372,10 @@ fn frost_pm_all_resolutions() -> Result<()> {
             group.round_1_commit(&["alice", "bob"], &mut OsRng)?;
 
         // Genesis
-        let (mut chain, mark_0, receipt, receipt_commitments) = FrostPmChain::new_chain(
+        let (mut chain, mark_0, receipt) = FrostPmChain::new_chain(
             group.clone(),
             genesis_signature,
-            seq1_commitments,
+            &seq1_commitments,
             res,
             &["alice", "bob"],
             Date::now(),
@@ -402,7 +402,7 @@ fn frost_pm_all_resolutions() -> Result<()> {
         );
         let signature2 = chain.group().round_2_sign(
             &["alice", "bob"],
-            &receipt_commitments,
+            &seq1_commitments,
             &seq1_nonces,
             &message2,
         )?;

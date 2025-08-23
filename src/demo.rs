@@ -60,10 +60,10 @@ pub fn run_demo() -> Result<()> {
             group.round_1_commit(&["alice", "bob"], &mut OsRng)?;
 
         // Genesis
-        let (mut chain, mark_0, mut current_receipt, mut current_commitments) = FrostPmChain::new_chain(
+        let (mut chain, mark_0, mut current_receipt) = FrostPmChain::new_chain(
             group.clone(),
             signature_0,
-            commitments_1,
+            &commitments_1,
             *res,
             &["alice", "bob"],
             Date::now(),
@@ -72,6 +72,7 @@ pub fn run_demo() -> Result<()> {
 
         // The client keeps the seq1_nonces for the first append_mark
         let mut current_nonces = nonces_1;
+        let mut current_commitments = commitments_1;
 
         println!(
             "   ✓ Genesis mark: {} (link: {} bytes)",

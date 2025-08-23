@@ -118,65 +118,6 @@ impl FrostGroup {
         self.public_key_package.verifying_key()
     }
 
-    /// Perform a complete signing ceremony with the specified signers and
-    /// message Takes participant names instead of identifiers
-    pub fn sign(
-        &self,
-        message: &[u8],
-        signers: &[&str],
-        rng: &mut (impl RngCore + CryptoRng),
-    ) -> Result<Signature> {
-        if signers.len() < self.config.min_signers() {
-            bail!(
-                "Need at least {} signers, got {}",
-                self.config.min_signers(),
-                signers.len()
-            );
-        }
-
-        // Validate all signer names exist upfront
-        for &signer_name in signers {
-            self.key_package(signer_name)?; // This validates the name exists
-        }
-
-        // Round 1: Generate nonces and commitments
-        let mut nonces_map: BTreeMap<String, SigningNonces> = BTreeMap::new();
-        let mut commitments_map: BTreeMap<String, SigningCommitments> =
-            BTreeMap::new();
-
-        for &signer_name in signers {
-            let (nonces, commitments) =
-                self.commit_for_participant(signer_name, rng)?;
-            nonces_map.insert(signer_name.to_string(), nonces);
-            commitments_map.insert(signer_name.to_string(), commitments);
-        }
-
-        let signing_package =
-            self.create_signing_package(signers, &commitments_map, message)?;
-
-        // Round 2: Generate signature shares
-        let mut signature_shares: BTreeMap<String, SignatureShare> =
-            BTreeMap::new();
-        for &signer_name in signers {
-            let nonces = &nonces_map[signer_name];
-            let signature_share = self.sign_for_participant(
-                signer_name,
-                &signing_package,
-                nonces,
-            )?;
-            signature_shares.insert(signer_name.to_string(), signature_share);
-        }
-
-        // Aggregate signature
-        let group_signature = self.aggregate_signature(
-            &signing_package,
-            signers,
-            &signature_shares,
-        )?;
-
-        Ok(group_signature)
-    }
-
     /// Verify a signature against a message using the group's public key
     pub fn verify(&self, message: &[u8], signature: &Signature) -> Result<()> {
         Ok(self.verifying_key().verify(message, signature)?)
@@ -298,47 +239,5 @@ impl FrostGroup {
     ) -> Result<SignatureShare> {
         let key_package = self.key_package(participant_name)?;
         Ok(frost::round2::sign(signing_package, nonces, key_package)?)
-    }
-
-    /// Helper method to create a signing package from signer names and their
-    /// commitments
-    fn create_signing_package(
-        &self,
-        signers: &[&str],
-        commitments_by_name: &BTreeMap<String, SigningCommitments>,
-        message: &[u8],
-    ) -> Result<SigningPackage> {
-        let mut frost_commitments_map: BTreeMap<
-            Identifier,
-            SigningCommitments,
-        > = BTreeMap::new();
-        for &signer_name in signers {
-            let signer_id = self.name_to_id(signer_name)?;
-            let commitments = &commitments_by_name[signer_name];
-            frost_commitments_map.insert(signer_id, commitments.clone());
-        }
-        Ok(SigningPackage::new(frost_commitments_map, message))
-    }
-
-    /// Helper method to aggregate signature shares and create the final
-    /// signature
-    fn aggregate_signature(
-        &self,
-        signing_package: &SigningPackage,
-        signers: &[&str],
-        signature_shares_by_name: &BTreeMap<String, SignatureShare>,
-    ) -> Result<Signature> {
-        let mut frost_signature_shares: BTreeMap<Identifier, SignatureShare> =
-            BTreeMap::new();
-        for &signer_name in signers {
-            let signer_id = self.name_to_id(signer_name)?;
-            let signature_share = &signature_shares_by_name[signer_name];
-            frost_signature_shares.insert(signer_id, signature_share.clone());
-        }
-        Ok(frost::aggregate(
-            signing_package,
-            &frost_signature_shares,
-            &self.public_key_package,
-        )?)
     }
 }

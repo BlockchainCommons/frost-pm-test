@@ -31,7 +31,7 @@ pub fn commitments_root(
 /// Returns the correct length for the given resolution
 pub fn kdf_next(
     chain_id: &[u8],
-    seq: usize,
+    seq: u32,
     root: [u8; 32],
     res: ProvenanceMarkResolution,
 ) -> Vec<u8> {

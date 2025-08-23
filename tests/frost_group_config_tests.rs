@@ -98,17 +98,19 @@ fn test_genesis_message_integration_with_pm_chain() {
     )
     .unwrap();
 
+    let res = ProvenanceMarkResolution::Medium;
+    let genesis_msg = FrostPmChain::genesis_message(&config, res);
+
     let mut rng = rand::thread_rng();
     let group = FrostGroup::new_with_trusted_dealer(config, &mut rng).unwrap();
 
     // Client generates genesis message and signs it
-    let genesis_msg = FrostPmChain::genesis_message(&group);
     let genesis_signature = group
         .sign(genesis_msg.as_bytes(), &["Alice", "Bob"], &mut rng)
         .unwrap();
 
     // Client generates Round-1 commitments for seq=1
-    let (seq1_commitments, seq1_nonces) =
+    let (seq1_commitments, _seq1_nonces) =
         FrostPmChain::generate_round1_commitments(
             &group,
             &["Alice", "Bob"],
@@ -117,12 +119,11 @@ fn test_genesis_message_integration_with_pm_chain() {
         .unwrap();
 
     // Create a provenance mark chain - this now takes the pre-signed genesis message and precommit data
-    let (_chain, genesis_mark, _receipt, _nonces) = FrostPmChain::new_genesis(
+    let (_chain, genesis_mark, _receipt) = FrostPmChain::new_genesis(
         group,
         genesis_signature,
         seq1_commitments,
-        seq1_nonces,
-        ProvenanceMarkResolution::Medium,
+        res,
         &["Alice", "Bob"],
         Date::now(),
         Some("Test genesis content"),
@@ -130,7 +131,7 @@ fn test_genesis_message_integration_with_pm_chain() {
     .unwrap();
 
     // Test that the genesis message is accessible through the chain
-    let expected_genesis = "FROST Genesis\nThreshold: 2 of 3\nParticipants: Alice, Bob, Charlie\nCharter: Test governance charter for integration test";
+    let expected_genesis = "FROST Provenance Mark Chain\nResolution: medium, Threshold: 2 of 3\nParticipants: Alice, Bob, Charlie\nCharter: Test governance charter for integration test";
     assert_eq!(genesis_msg, expected_genesis);
 
     // Verify the genesis mark was created successfully

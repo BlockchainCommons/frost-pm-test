@@ -12,14 +12,14 @@ fn frost_controls_pm_chain() -> Result<()> {
         &["alice", "bob", "charlie"],
         "Provenance mark chain demonstration".to_string(),
     )?;
-    let group = FrostGroup::new_with_trusted_dealer(config, &mut OsRng)?;
     let res = ProvenanceMarkResolution::Quartile;
+    let genesis_msg = FrostPmChain::genesis_message(&config, res);
+    let group = FrostGroup::new_with_trusted_dealer(config, &mut OsRng)?;
 
     // Fake "image" for genesis
     let image_content = "demo image bytes";
 
     // Client generates genesis message and signs it
-    let genesis_msg = FrostPmChain::genesis_message(&group);
     let genesis_signature =
         group.sign(genesis_msg.as_bytes(), &["alice", "bob"], &mut OsRng)?;
 
@@ -32,11 +32,10 @@ fn frost_controls_pm_chain() -> Result<()> {
         )?;
 
     // Genesis from alice+bob
-    let (mut chain, mark0, receipt, nonces) = FrostPmChain::new_genesis(
+    let (mut chain, mark0, receipt) = FrostPmChain::new_genesis(
         group.clone(),
         genesis_signature,
         seq1_commitments,
-        seq1_nonces,
         res,
         &["alice", "bob"],
         Date::now(),
@@ -60,7 +59,7 @@ fn frost_controls_pm_chain() -> Result<()> {
         chain.group(),
         &["alice", "bob"],
         &receipt.commitments,
-        &nonces,
+        &seq1_nonces,
         &message,
     )?;
 
@@ -140,11 +139,11 @@ fn frost_pm_chain_insufficient_signers_fails() -> Result<()> {
         &["alice", "bob", "charlie"],
         "Insufficient signers test chain".to_string(),
     )?;
-    let group = FrostGroup::new_with_trusted_dealer(config, &mut OsRng)?;
     let res = ProvenanceMarkResolution::Medium;
+    let genesis_msg = FrostPmChain::genesis_message(&config, res);
+    let group = FrostGroup::new_with_trusted_dealer(config, &mut OsRng)?;
 
     // Generate genesis message and try to sign with insufficient signers - this should fail at signing stage
-    let genesis_msg = FrostPmChain::genesis_message(&group);
     let sign_result =
         group.sign(genesis_msg.as_bytes(), &["alice"], &mut OsRng); // Only 1 signer, but threshold is 2
 
@@ -157,7 +156,7 @@ fn frost_pm_chain_insufficient_signers_fails() -> Result<()> {
         group.sign(genesis_msg.as_bytes(), &["alice", "bob"], &mut OsRng)?;
 
     // We also need valid commitments for the test
-    let (seq1_commitments, seq1_nonces) =
+    let (seq1_commitments, _seq1_nonces) =
         FrostPmChain::generate_round1_commitments(
             &group,
             &["alice", "bob"],
@@ -169,7 +168,6 @@ fn frost_pm_chain_insufficient_signers_fails() -> Result<()> {
         group,
         valid_signature,
         seq1_commitments,
-        seq1_nonces,
         res,
         &["alice"], // Only 1 signer, but threshold is 2
         Date::now(),
@@ -194,11 +192,11 @@ fn frost_pm_chain_date_monotonicity() -> Result<()> {
         &["alice", "bob", "charlie"],
         "Date monotonicity test chain".to_string(),
     )?;
-    let group = FrostGroup::new_with_trusted_dealer(config, &mut OsRng)?;
-    let res = ProvenanceMarkResolution::High;
 
     // Client generates genesis message and signs it
-    let genesis_msg = FrostPmChain::genesis_message(&group);
+    let res = ProvenanceMarkResolution::High;
+    let genesis_msg = FrostPmChain::genesis_message(&config, res);
+    let group = FrostGroup::new_with_trusted_dealer(config, &mut OsRng)?;
     let genesis_signature =
         group.sign(genesis_msg.as_bytes(), &["alice", "bob"], &mut OsRng)?;
 
@@ -211,11 +209,10 @@ fn frost_pm_chain_date_monotonicity() -> Result<()> {
         )?;
 
     let genesis_time = Date::now();
-    let (mut chain, _mark0, receipt, nonces) = FrostPmChain::new_genesis(
+    let (mut chain, _mark0, receipt) = FrostPmChain::new_genesis(
         group,
         genesis_signature,
         seq1_commitments,
-        seq1_nonces,
         res,
         &["alice", "bob"],
         genesis_time.clone(),
@@ -237,7 +234,7 @@ fn frost_pm_chain_date_monotonicity() -> Result<()> {
         chain.group(),
         &["alice", "bob"],
         &receipt.commitments,
-        &nonces,
+        &seq1_nonces,
         &message_fail,
     )?;
 
@@ -268,11 +265,11 @@ fn frost_pm_different_signer_combinations() -> Result<()> {
         &["alice", "bob", "charlie"],
         "Different signer combinations test chain".to_string(),
     )?;
-    let group = FrostGroup::new_with_trusted_dealer(config, &mut OsRng)?;
     let res = ProvenanceMarkResolution::Low;
+    let genesis_msg = FrostPmChain::genesis_message(&config, res);
+    let group = FrostGroup::new_with_trusted_dealer(config, &mut OsRng)?;
 
     // Client generates genesis message and signs it
-    let genesis_msg = FrostPmChain::genesis_message(&group);
     let genesis_signature = group.sign(
         genesis_msg.as_bytes(),
         &["alice", "bob", "charlie"],
@@ -288,11 +285,10 @@ fn frost_pm_different_signer_combinations() -> Result<()> {
         )?;
 
     // Genesis with alice, bob, charlie
-    let (mut chain, mark0, receipt, nonces) = FrostPmChain::new_genesis(
+    let (mut chain, mark0, receipt) = FrostPmChain::new_genesis(
         group.clone(),
         genesis_signature,
         seq1_commitments,
-        seq1_nonces,
         res,
         &["alice", "bob", "charlie"],
         Date::now(),
@@ -310,7 +306,7 @@ fn frost_pm_different_signer_combinations() -> Result<()> {
         chain.group(),
         &["alice", "bob", "charlie"],
         &receipt.commitments,
-        &nonces,
+        &seq1_nonces,
         &message_next,
     )?;
 
@@ -360,7 +356,7 @@ fn frost_pm_all_resolutions() -> Result<()> {
         // Test data for this resolution
 
         // Client generates genesis message and signs it
-        let genesis_msg = FrostPmChain::genesis_message(&group);
+        let genesis_msg = FrostPmChain::genesis_message(group.config(), res);
         let genesis_signature = group.sign(
             genesis_msg.as_bytes(),
             &["alice", "bob"],
@@ -376,11 +372,10 @@ fn frost_pm_all_resolutions() -> Result<()> {
             )?;
 
         // Genesis
-        let (mut chain, mark0, receipt, nonces) = FrostPmChain::new_genesis(
+        let (mut chain, mark0, receipt) = FrostPmChain::new_genesis(
             group.clone(),
             genesis_signature,
             seq1_commitments,
-            seq1_nonces,
             res,
             &["alice", "bob"],
             Date::now(),
@@ -409,7 +404,7 @@ fn frost_pm_all_resolutions() -> Result<()> {
             chain.group(),
             &["alice", "bob"],
             &receipt.commitments,
-            &nonces,
+            &seq1_nonces,
             &message2,
         )?;
 

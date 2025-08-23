@@ -51,7 +51,7 @@ pub fn run_demo() -> Result<()> {
         println!("   Genesis hash: {}", hex::encode(&obj_hash1));
 
         // Client generates genesis message and signs it
-        let genesis_msg = FrostPmChain::genesis_message(&group);
+        let genesis_msg = FrostPmChain::genesis_message(group.config(), *res);
         let genesis_signature = group.sign(
             genesis_msg.as_bytes(),
             &["alice", "bob"],
@@ -67,17 +67,19 @@ pub fn run_demo() -> Result<()> {
             )?;
 
         // Genesis
-        let (mut chain, genesis_mark, mut current_receipt, mut current_nonces) =
+        let (mut chain, genesis_mark, mut current_receipt) =
             FrostPmChain::new_genesis(
                 group.clone(),
                 genesis_signature,
                 seq1_commitments,
-                seq1_nonces,
                 *res,
                 &["alice", "bob"],
                 Date::now(),
                 Some(artwork_name),
             )?;
+
+        // The client keeps the seq1_nonces for the first append_mark
+        let mut current_nonces = seq1_nonces;
 
         println!(
             "   ✓ Genesis mark: {} (link: {} bytes)",

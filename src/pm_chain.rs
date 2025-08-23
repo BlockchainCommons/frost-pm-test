@@ -1,5 +1,5 @@
 use crate::{
-    FrostGroup,
+    FrostGroup, FrostGroupConfig,
     kdf::{commitments_root, kdf_next},
 };
 use anyhow::{Result, bail};
@@ -16,9 +16,8 @@ use std::collections::BTreeMap;
 /// Contains the commitment root and roster used in the session
 #[derive(Clone, Debug)]
 pub struct PrecommitReceipt {
-    pub seq: usize,
+    pub seq: u32,
     pub root: [u8; 32],
-    pub ids: Vec<Identifier>,
     pub commitments: BTreeMap<Identifier, SigningCommitments>,
 }
 
@@ -58,8 +57,8 @@ impl FrostPmChain {
     }
 
     /// Get the next sequence number for the chain
-    fn next_seq(&self) -> usize {
-        self.last_mark.seq() as usize + 1
+    fn next_seq(&self) -> u32 {
+        self.last_mark.seq() + 1
     }
 
     /// Get a reference to the underlying FROST group (for client use)
@@ -68,12 +67,15 @@ impl FrostPmChain {
     }
 
     /// Create a genesis message for a group (static version for new_genesis)
-    pub fn genesis_message(group: &FrostGroup) -> String {
-        let config = group.config();
+    pub fn genesis_message(
+        config: &FrostGroupConfig,
+        res: ProvenanceMarkResolution,
+    ) -> String {
         let participant_names: Vec<String> =
             config.participants().keys().cloned().collect();
         format!(
-            "FROST Genesis\nThreshold: {} of {}\nParticipants: {}\nCharter: {}",
+            "FROST Provenance Mark Chain\nResolution: {}, Threshold: {} of {}\nParticipants: {}\nCharter: {}",
+            res,
             config.min_signers(),
             participant_names.len(),
             participant_names.join(", "),
@@ -129,18 +131,12 @@ impl FrostPmChain {
     pub fn new_genesis(
         group: FrostGroup,
         genesis_message_signature: frost_ed25519::Signature,
-        seq1_commitments: BTreeMap<Identifier, SigningCommitments>,
-        seq1_nonces: BTreeMap<String, SigningNonces>,
+        commitments_1: BTreeMap<Identifier, SigningCommitments>,
         res: ProvenanceMarkResolution,
         signers: &[&str],
         date: Date,
         info: Option<impl CBOREncodable>,
-    ) -> Result<(
-        Self,
-        ProvenanceMark,
-        PrecommitReceipt,
-        BTreeMap<String, SigningNonces>,
-    )> {
+    ) -> Result<(Self, ProvenanceMark, PrecommitReceipt)> {
         if signers.len() < group.min_signers() as usize {
             bail!("insufficient signers");
         }
@@ -148,7 +144,7 @@ impl FrostPmChain {
 
         // 1. Derive key_0 (and thus id) using the provided genesis message signature
         // Build M0 from group configuration including charter and participant names
-        let genesis_msg = Self::genesis_message(&group);
+        let genesis_msg = Self::genesis_message(group.config(), res);
         let m0 = genesis_msg.as_bytes();
 
         // Verify the provided signature against the genesis message
@@ -165,30 +161,24 @@ impl FrostPmChain {
 
         // 2. Use provided precommit data for seq=1
         // The client has already performed Round-1 commit for the next sequence
-        let commitments_map = seq1_commitments;
-        let nonces_map = seq1_nonces;
 
         // Compute Root_1 = commitments_root(&commitments_map)
-        let root_next = commitments_root(&commitments_map);
+        let next_root = commitments_root(&commitments_1);
 
         let receipt1 = PrecommitReceipt {
             seq: 1,
-            root: root_next,
-            ids: signers
-                .iter()
-                .map(|name| group.name_to_id(name).expect("valid participant"))
-                .collect(),
-            commitments: commitments_map.clone(),
+            root: next_root,
+            commitments: commitments_1.clone(),
         };
 
-        // Compute nextKey_0 = derive_link_from_root(res, id, 1, Root_1)
-        let next_key0 = kdf_next(&id, 1, receipt1.root, res);
+        // Compute next_key_0 = derive_link_from_root(res, id, 1, Root_1)
+        let next_key_0 = kdf_next(&id, 1, receipt1.root, res);
 
-        // 3. Finalize M⟨0⟩ with key_0 and this nextKey_0
-        let mark0 = ProvenanceMark::new(
+        // 3. Finalize M⟨0⟩ with key_0 and this next_key_0
+        let mark_0 = ProvenanceMark::new(
             res,
             key_0,
-            next_key0,
+            next_key_0,
             id.clone(),
             0,
             date.clone(),
@@ -196,52 +186,9 @@ impl FrostPmChain {
         )?;
 
         // 4. Create the chain with the genesis mark
-        let chain = Self { group, last_mark: mark0.clone() };
+        let chain = Self { group, last_mark: mark_0.clone() };
 
-        Ok((chain, mark0, receipt1, nonces_map))
-    }
-
-    /// Precommit for next mark (Round-1 only)
-    /// Returns a PrecommitReceipt and nonces for later use in Round-2
-    /// In a real distributed system, participants would manage nonces locally
-    pub fn precommit_next_mark(
-        &mut self,
-        signers: &[&str],
-        next_seq: usize,
-        chain_id: &[u8],
-        res: ProvenanceMarkResolution,
-    ) -> Result<(PrecommitReceipt, BTreeMap<String, SigningNonces>)> {
-        if signers.len() < self.group.min_signers() as usize {
-            bail!("insufficient signers for precommit");
-        }
-
-        // 1. Collect commitments for next_seq
-        // Each participant runs round1::commit and retains SigningNonces locally.
-        let (commitments_map, nonces_map) =
-            self.group.round1_commit(signers, &mut OsRng)?;
-
-        // 2. Compute Root_{next_seq} = commitments_root(&commitments_map)
-        let root_next = commitments_root(&commitments_map);
-
-        // 3. Compute nextKey_{next_seq-1} = kdf_next(chain_id, next_seq, Root_next)
-        // and finalize the previous mark's hash using that nextKey
-        let _next_key = kdf_next(chain_id, next_seq, root_next, res);
-
-        // 4. Create PrecommitReceipt (public, non-secret)
-        let ids: Vec<Identifier> = signers
-            .iter()
-            .map(|name| self.group.name_to_id(name).expect("valid participant"))
-            .collect();
-
-        let receipt = PrecommitReceipt {
-            seq: next_seq,
-            root: root_next,
-            ids,
-            commitments: commitments_map,
-        };
-
-        // 5. Return both receipt and nonces for the application to manage
-        Ok((receipt, nonces_map))
+        Ok((chain, mark_0, receipt1))
     }
 
     /// Append the next mark using precommitted Round-1 commitments
@@ -297,25 +244,29 @@ impl FrostPmChain {
         // 5. VERIFY the provided signature under the group verifying key
         self.group.verify(&message, &signature)?;
 
-        // 7. BEFORE finalizing this mark's hash, run precommit for seq+1 to get nextKey_seq
+        // 6. BEFORE finalizing this mark's hash, precommit for seq+1 to get next_key
         let chain_id = self.chain_id().to_vec();
         let res = self.res();
-        let (next_receipt, next_nonces) =
-            self.precommit_next_mark(signers, seq + 1, &chain_id, res)?;
-        let next_key = kdf_next(&chain_id, seq + 1, next_receipt.root, res);
+        let next_seq = seq + 1;
 
-        // 8. Use key and next_key to create the mark
-        let mark = ProvenanceMark::new(
-            res,
-            key,
-            next_key,
-            chain_id,
-            seq as u32,
-            date,
-            info,
-        )?;
+        // Precommit: collect commitments for next_seq
+        let (next_commitments, next_nonces) =
+            self.group.round1_commit(signers, &mut OsRng)?;
+        let next_root = commitments_root(&next_commitments);
 
-        // 9. Update state and store the new mark for future verification
+        let next_receipt = PrecommitReceipt {
+            seq: next_seq,
+            root: next_root,
+            commitments: next_commitments,
+        };
+
+        let next_key = kdf_next(&chain_id, next_seq, next_receipt.root, res);
+
+        // 7. Use key and next_key to create the mark
+        let mark =
+            ProvenanceMark::new(res, key, next_key, chain_id, seq, date, info)?;
+
+        // 8. Store the new mark
         self.last_mark = mark.clone();
 
         Ok((mark, next_receipt, next_nonces))

@@ -21,19 +21,24 @@ fn family_config() -> Result<FrostGroupConfig> {
 }
 
 #[test]
-fn test_default_config() {
-    let config = FrostGroupConfig::default();
+fn test_default_config() -> Result<()> {
+    let config = FrostGroupConfig::new(
+        2,
+        &["Alice", "Bob", "Eve"],
+        "Default FROST group for testing".to_string(),
+    )?;
     assert_eq!(config.min_signers(), 2);
     assert_eq!(config.max_signers(), 3);
     assert_eq!(config.participant_ids().len(), 3);
 
     let names = config.participant_names_string();
     assert_eq!(names, "Alice, Bob, Eve");
+    Ok(())
 }
 
 #[test]
-fn test_corporate_board_config() {
-    let config = corporate_board_config().unwrap();
+fn test_corporate_board_config() -> Result<()> {
+    let config = corporate_board_config()?;
     assert_eq!(config.min_signers(), 3);
     assert_eq!(config.max_signers(), 5);
     assert_eq!(config.participant_ids().len(), 5);
@@ -44,11 +49,13 @@ fn test_corporate_board_config() {
     assert!(names.contains("CTO"));
     assert!(names.contains("COO"));
     assert!(names.contains("CLO"));
+
+    Ok(())
 }
 
 #[test]
-fn test_family_config() {
-    let config = family_config().unwrap();
+fn test_family_config() -> Result<()> {
+    let config = family_config()?;
     assert_eq!(config.min_signers(), 2);
     assert_eq!(config.max_signers(), 4);
     assert_eq!(config.participant_ids().len(), 4);
@@ -58,10 +65,11 @@ fn test_family_config() {
     assert!(names.contains("Bob"));
     assert!(names.contains("Charlie"));
     assert!(names.contains("Diana"));
+    Ok(())
 }
 
 #[test]
-fn test_config_validation() {
+fn test_config_validation() -> Result<()> {
     // Test min_signers = 0
     let result =
         FrostGroupConfig::new(0, &["Alice", "Bob"], "Test charter".to_string());
@@ -83,11 +91,11 @@ fn test_config_validation() {
     assert_eq!(config.min_signers(), 2);
     assert_eq!(config.max_signers(), 3);
     assert_eq!(config.charter(), "Test charter");
+    Ok(())
 }
 
 #[test]
-fn test_genesis_message_integration_with_pm_chain()
--> Result<(), Box<dyn std::error::Error>> {
+fn test_genesis_message_integration_with_pm_chain() -> Result<()> {
     use dcbor::Date;
     use frost_pm_test::{FrostGroup, FrostPmChain};
     use provenance_mark::ProvenanceMarkResolution;
@@ -143,8 +151,12 @@ fn test_genesis_message_integration_with_pm_chain()
 }
 
 #[test]
-fn test_participant_name_lookup() -> Result<(), Box<dyn std::error::Error>> {
-    let config = FrostGroupConfig::default();
+fn test_participant_name_lookup() -> Result<()> {
+    let config = FrostGroupConfig::new(
+        2,
+        &["Alice", "Bob", "Eve"],
+        "Default FROST group for testing".to_string(),
+    )?;
     let participant_ids = config.participant_ids();
 
     // Test that we can look up participant names
@@ -161,9 +173,14 @@ fn test_participant_name_lookup() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn test_participant_names_string() {
-    let config = FrostGroupConfig::default();
+fn test_participant_names_string() -> Result<()> {
+    let config = FrostGroupConfig::new(
+        2,
+        &["Alice", "Bob", "Eve"],
+        "Default FROST group for testing".to_string(),
+    )?;
     let names = config.participant_names_string();
     // BTreeMap maintains sorted order, so we can predict the output
     assert_eq!(names, "Alice, Bob, Eve");
+    Ok(())
 }

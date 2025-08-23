@@ -87,14 +87,3 @@ impl FrostGroupConfig {
         &self.participants
     }
 }
-
-impl Default for FrostGroupConfig {
-    fn default() -> Self {
-        Self::new(
-            2,
-            &["Alice", "Bob", "Eve"],
-            "Default FROST group for testing".to_string(),
-        )
-        .expect("Default FROSTGroupConfig should be valid")
-    }
-}

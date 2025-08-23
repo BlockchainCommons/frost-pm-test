@@ -21,7 +21,11 @@ pub fn family_config() -> Result<FrostGroupConfig> {
 
 #[test]
 fn test_group_creation_with_trusted_dealer() -> Result<()> {
-    let config = FrostGroupConfig::default();
+    let config = FrostGroupConfig::new(
+        2,
+        &["Alice", "Bob", "Eve"],
+        "Default FROST group for testing".to_string(),
+    )?;
     let group = FrostGroup::new_with_trusted_dealer(config, &mut OsRng)?;
 
     assert_eq!(group.min_signers(), 2);
@@ -38,7 +42,11 @@ fn test_group_creation_with_trusted_dealer() -> Result<()> {
 
 #[test]
 fn test_group_signing() -> Result<()> {
-    let config = FrostGroupConfig::default();
+    let config = FrostGroupConfig::new(
+        2,
+        &["Alice", "Bob", "Eve"],
+        "Default FROST group for testing".to_string(),
+    )?;
     let group = FrostGroup::new_with_trusted_dealer(config, &mut OsRng)?;
     let message = b"Test message for FROST signing";
 
@@ -72,7 +80,11 @@ fn test_group_signing() -> Result<()> {
 
 #[test]
 fn test_group_insufficient_signers() -> Result<()> {
-    let config = FrostGroupConfig::default();
+    let config = FrostGroupConfig::new(
+        2,
+        &["Alice", "Bob", "Eve"],
+        "Default FROST group for testing".to_string(),
+    )?;
     let group = FrostGroup::new_with_trusted_dealer(config, &mut OsRng)?;
 
     // Try to sign with only 1 signer (need 2 for threshold)
@@ -115,7 +127,11 @@ fn test_corporate_board_signing() -> Result<()> {
 
 #[test]
 fn test_group_participant_management() -> Result<()> {
-    let config = FrostGroupConfig::default();
+    let config = FrostGroupConfig::new(
+        2,
+        &["Alice", "Bob", "Eve"],
+        "Default FROST group for testing".to_string(),
+    )?;
     let group = FrostGroup::new_with_trusted_dealer(config, &mut OsRng)?;
 
     // Test participant names retrieval
@@ -137,7 +153,11 @@ fn test_group_participant_management() -> Result<()> {
 #[test]
 fn test_group_basic_functionality() -> Result<()> {
     // Test that demonstrates the basic functionality works
-    let config = FrostGroupConfig::default();
+    let config = FrostGroupConfig::new(
+        2,
+        &["Alice", "Bob", "Eve"],
+        "Default FROST group for testing".to_string(),
+    )?;
     let group = FrostGroup::new_with_trusted_dealer(config, &mut OsRng)?;
 
     // Verify basic properties

@@ -148,11 +148,10 @@ impl FrostPmChain {
         info: Option<impl CBOREncodable>,
         receipt_root: Option<[u8; 32]>,
         signature: frost_ed25519::Signature,
-        next_commitments: BTreeMap<Identifier, SigningCommitments>,
+        next_commitments: &BTreeMap<Identifier, SigningCommitments>,
     ) -> Result<(
         ProvenanceMark,
-        [u8; 32],
-        BTreeMap<Identifier, SigningCommitments>,
+        [u8; 32]
     )> {
         // Check date monotonicity against the last mark's date
         if date < *self.last_mark.date() {
@@ -186,18 +185,18 @@ impl FrostPmChain {
         let next_seq = seq + 1;
 
         // Use client-provided commitments for next sequence
-        let next_root = Self::commitments_root(&next_commitments);
+        let next_root = Self::commitments_root(next_commitments);
 
         let next_key = Self::kdf_next(&chain_id, next_seq, next_root, res);
 
         // 7. Use key and next_key to create the mark
-        let mark =
+        let next_mark =
             ProvenanceMark::new(res, key, next_key, chain_id, seq, date, info)?;
 
         // 8. Store the new mark
-        self.last_mark = mark.clone();
+        self.last_mark = next_mark.clone();
 
-        Ok((mark, next_root, next_commitments))
+        Ok((next_mark, next_root))
     }
 
     /// Compute a deterministic root over Round-1 commitment map

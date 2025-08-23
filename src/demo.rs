@@ -116,13 +116,13 @@ pub fn run_demo() -> Result<()> {
             let (next_commitments, new_nonces) =
                 chain.group().round_1_commit(signers, &mut OsRng)?;
 
-            let (mark, new_root, next_commitments) = chain
+            let (mark, new_root) = chain
                 .append_mark(
                     current_date,
                     Some(content),
                     Some(current_root),
                     signature,
-                    next_commitments,
+                    &next_commitments,
                 )?;
 
             // Update for next iteration

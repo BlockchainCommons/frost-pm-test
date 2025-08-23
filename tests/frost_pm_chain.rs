@@ -16,9 +16,6 @@ fn frost_controls_pm_chain() -> Result<()> {
     let message_0 = FrostPmChain::genesis_message(&config, res);
     let group = FrostGroup::new_with_trusted_dealer(config, &mut OsRng)?;
 
-    // Fake "image" for genesis
-    let image_content = "demo image bytes";
-
     // Client generates genesis message and signs it
     let signers = &["Alice", "Bob"];
     let (commitments_0, nonces_0) =
@@ -35,29 +32,31 @@ fn frost_controls_pm_chain() -> Result<()> {
         group.round_1_commit(signers, &mut OsRng)?;
 
     // Genesis from Alice+Bob
+    let date_0 = Date::now();
+    let info_0 = None::<String>;
     let (mut chain, mark_0, root_1) = FrostPmChain::new_chain(
         group.clone(),
         signature_0,
         &commitments_1,
         res,
-        Date::now(),
-        Some(image_content),
+        date_0,
+        info_0,
     )?;
 
     println!("Genesis mark created: {}", mark_0.identifier());
     assert!(mark_0.is_genesis());
 
     // Create second mark with a different "image"
-    let content_2 = "second image bytes";
-    let date_2 = Date::now();
+    let info_1 = "second image bytes";
+    let date_1 = Date::now();
 
     // Client generates message and Round-2 signature
     let message = FrostPmChain::next_mark_message(
         &chain,
-        date_2.clone(),
-        Some(content_2),
+        date_1.clone(),
+        Some(info_1),
     );
-    let signature = chain.group().round_2_sign(
+    let signature_1 = chain.group().round_2_sign(
         signers,
         &commitments_1,
         &nonces_1,
@@ -68,13 +67,13 @@ fn frost_controls_pm_chain() -> Result<()> {
     let (commitments_2, nonces_2) =
         chain.group().round_1_commit(signers, &mut OsRng)?;
 
-    let (mark_1, receipt_root, receipt_commitments) = chain
+    let (mark_1, receipt_root) = chain
         .append_mark(
-            date_2,
-            Some(content_2),
+            date_1,
+            Some(info_1),
             Some(root_1),
-            signature,
-            commitments_2,
+            signature_1,
+            &commitments_2,
         )?;
 
     println!("Mark 1 created: {}", mark_1.identifier());
@@ -91,7 +90,7 @@ fn frost_controls_pm_chain() -> Result<()> {
     );
     let signature_3 = chain.group().round_2_sign(
         signers,
-        &receipt_commitments,
+        &commitments_2,
         &nonces_2,
         &message_3,
     )?;
@@ -100,13 +99,13 @@ fn frost_controls_pm_chain() -> Result<()> {
     let (commitments_3, _nonces_3) =
         chain.group().round_1_commit(signers, &mut OsRng)?;
 
-    let (mark_2, _receipt_root, _receipt_commitments) = chain
+    let (mark_2, _receipt_root) = chain
         .append_mark(
             date_3,
             Some(content_3),
             Some(receipt_root),
             signature_3,
-            commitments_3,
+            &commitments_3,
         )?;
 
     println!("Third mark created: {}", mark_2.identifier());
@@ -179,13 +178,13 @@ fn frost_pm_chain_date_monotonicity() -> Result<()> {
     )?;
 
     // Try to create a mark with earlier date than genesis (should fail)
-    let earlier_time =
+    let earlier_date =
         Date::from_datetime(date_0.datetime() - chrono::Duration::seconds(60));
 
     // Even though this will fail, we need to provide a signature
     let message_fail = FrostPmChain::next_mark_message(
         &chain,
-        earlier_time.clone(),
+        earlier_date.clone(),
         Some("test content 2"),
     );
     let signature_fail = chain.group().round_2_sign(
@@ -196,15 +195,15 @@ fn frost_pm_chain_date_monotonicity() -> Result<()> {
     )?;
 
     // Generate commitments for the test (even though it will fail)
-    let (dummy_commitments, _dummy_nonces) =
+    let (commitments_2, _nonces_2) =
         chain.group().round_1_commit(signers, &mut OsRng)?;
 
     let result = chain.append_mark(
-        earlier_time,
+        earlier_date,
         Some("test content 2"),
         Some(root_1),
         signature_fail,
-        dummy_commitments,
+        &commitments_2,
     );
 
     assert!(result.is_err());
@@ -274,13 +273,13 @@ fn frost_pm_different_signer_combinations() -> Result<()> {
     let (commitments_2, _nonces_2) =
         chain.group().round_1_commit(signers, &mut OsRng)?;
 
-    let (mark_1, _receipt_root, _receipt_commitments) = chain
+    let (mark_1, _receipt_root) = chain
         .append_mark(
             date_1,
             Some("test content 2"),
             Some(root_1),
             signature_1,
-            commitments_2,
+            &commitments_2,
         )?;
 
     // Verify both marks are valid and form a proper chain
@@ -374,16 +373,16 @@ fn frost_pm_all_resolutions() -> Result<()> {
         )?;
 
         // Generate commitments for seq=2
-        let (seq2_commitments, seq2_nonces) =
+        let (commitments_2, nonces_2) =
             chain.group().round_1_commit(signers, &mut OsRng)?;
 
-        let (mark_1, receipt_root, receipt_commitments) = chain
+        let (mark_1, receipt_root) = chain
             .append_mark(
                 date_1,
                 Some("test content 2"),
                 Some(root_1),
                 signature_1,
-                seq2_commitments,
+                &commitments_2,
             )?;
 
         // Verify chain properties
@@ -406,22 +405,22 @@ fn frost_pm_all_resolutions() -> Result<()> {
         );
         let signature_2 = chain.group().round_2_sign(
             signers,
-            &receipt_commitments,
-            &seq2_nonces,
+            &commitments_2,
+            &nonces_2,
             &message_2,
         )?;
 
         // Generate commitments for seq=3
-        let (seq3_commitments, _seq3_nonces) =
+        let (commitments_3, _nonces_3) =
             chain.group().round_1_commit(signers, &mut OsRng)?;
 
-        let (mark_2, _receipt_root, _receipt_commitments) = chain
+        let (mark_2, _receipt_root) = chain
             .append_mark(
                 date_2,
                 Some("test content 3"),
                 Some(receipt_root),
                 signature_2,
-                seq3_commitments,
+                &commitments_3,
             )?;
 
         // Verify chain properties

@@ -14,7 +14,8 @@ fn frost_controls_pm_chain() -> Result<()> {
     )?;
     let res = ProvenanceMarkResolution::Quartile;
     let date_0 = Date::now();
-    let message_0 = FrostPmChain::message_0(&config, res, &date_0);
+    let info_0 = None::<String>;
+    let message_0 = FrostPmChain::message_0(&config, res, &date_0, info_0.clone());
     let group = FrostGroup::new_with_trusted_dealer(config, &mut OsRng)?;
 
     // Client generates genesis message and signs it
@@ -33,7 +34,6 @@ fn frost_controls_pm_chain() -> Result<()> {
         group.round_1_commit(signers, &mut OsRng)?;
 
     // Genesis from Alice+Bob
-    let info_0 = None::<String>;
     let (mut chain, mark_0) = FrostPmChain::new_chain(
         res,
         &date_0,
@@ -144,7 +144,8 @@ fn frost_pm_chain_date_monotonicity() -> Result<()> {
     // Client generates genesis message and signs it
     let res = ProvenanceMarkResolution::High;
     let date_0 = Date::now();
-    let message_0 = FrostPmChain::message_0(&config, res, &date_0);
+    let info_0 = Some("test content");
+    let message_0 = FrostPmChain::message_0(&config, res, &date_0, info_0);
     let group = FrostGroup::new_with_trusted_dealer(config, &mut OsRng)?;
     let signers = &["Alice", "Bob"];
     let (commitments_0, nonces_0) =
@@ -160,7 +161,6 @@ fn frost_pm_chain_date_monotonicity() -> Result<()> {
     let (commitments_1, nonces_1) =
         group.round_1_commit(signers, &mut OsRng)?;
 
-    let info_0 = Some("test content");
     let (mut chain, _mark_0) = FrostPmChain::new_chain(
         res,
         &date_0,
@@ -219,7 +219,8 @@ fn frost_pm_different_signer_combinations() -> Result<()> {
     )?;
     let res = ProvenanceMarkResolution::Low;
     let date_0 = Date::now();
-    let message_0 = FrostPmChain::message_0(&config, res, &date_0);
+    let info_0 = Some("test content 1");
+    let message_0 = FrostPmChain::message_0(&config, res, &date_0, info_0);
     let group = FrostGroup::new_with_trusted_dealer(config, &mut OsRng)?;
 
     // Client generates genesis message and signs it
@@ -238,7 +239,6 @@ fn frost_pm_different_signer_combinations() -> Result<()> {
         group.round_1_commit(signers, &mut OsRng)?;
 
     // Genesis with Alice, Bob, Charlie
-    let info_0 = Some("test content 1");
     let (mut chain, mark_0) = FrostPmChain::new_chain(
         res,
         &date_0,
@@ -313,7 +313,8 @@ fn frost_pm_all_resolutions() -> Result<()> {
 
         // Client generates genesis message and signs it
         let date_0 = Date::now();
-        let message_0 = FrostPmChain::message_0(group.config(), res, &date_0);
+        let info_0 = Some("test content 0");
+        let message_0 = FrostPmChain::message_0(group.config(), res, &date_0, info_0);
         let signers = &["Alice", "Bob"];
         let (commitments_0, nonces_0) =
             group.round_1_commit(signers, &mut OsRng)?;
@@ -329,7 +330,6 @@ fn frost_pm_all_resolutions() -> Result<()> {
             group.round_1_commit(signers, &mut OsRng)?;
 
         // Genesis
-        let info_0 = Some("test content 0");
         let (mut chain, mark_0) = FrostPmChain::new_chain(
             res,
             &date_0,

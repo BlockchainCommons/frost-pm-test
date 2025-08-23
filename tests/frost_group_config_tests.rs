@@ -1,5 +1,5 @@
 use anyhow::Result;
-use frost_ed25519 as frost;
+use frost_ed25519::{self as frost};
 use frost_pm_test::FrostGroupConfig;
 use rand::rngs::OsRng;
 
@@ -109,7 +109,8 @@ fn test_genesis_message_integration_with_pm_chain() -> Result<()> {
 
     let res = ProvenanceMarkResolution::Medium;
     let date_0 = Date::from_ymd(2025, 1, 1);
-    let message_0 = FrostPmChain::message_0(&config, res, &date_0);
+    let info_0 = None::<String>;
+    let message_0 = FrostPmChain::message_0(&config, res, &date_0, info_0.clone());
 
     let group = FrostGroup::new_with_trusted_dealer(config, &mut OsRng)?;
 
@@ -132,14 +133,14 @@ fn test_genesis_message_integration_with_pm_chain() -> Result<()> {
     let (_chain, genesis_mark) = FrostPmChain::new_chain(
         res,
         &date_0,
-        Some("Test genesis content"),
+        info_0,
         group,
         signature_0,
         &seq1_commitments,
     )?;
 
     // Test that the genesis message is accessible through the chain
-    let expected_genesis = "FROST Provenance Mark Chain\nResolution: medium, Threshold: 2 of 3\nParticipants: Alice, Bob, Charlie\nCharter: Test governance charter for integration test\nDate: 2025-01-01";
+    let expected_genesis = "FROST Provenance Mark Chain\nResolution: medium, Threshold: 2 of 3\nParticipants: Alice, Bob, Charlie\nCharter: Test governance charter for integration test\nDate: 2025-01-01\nInfo Hash: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
     assert_eq!(message_0, expected_genesis);
 
     // Verify the genesis mark was created successfully

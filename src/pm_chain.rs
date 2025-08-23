@@ -60,17 +60,25 @@ impl FrostPmChain {
         config: &FrostGroupConfig,
         res: ProvenanceMarkResolution,
         date: &Date,
+        info: Option<impl CBOREncodable>,
     ) -> String {
         let participant_names: Vec<String> =
             config.participants().keys().cloned().collect();
+        let info_data = if let Some(ref info_val) = info {
+            info_val.to_cbor_data()
+        } else {
+            Vec::new()
+        };
+        let info_hash = hex::encode(sha256(&info_data));
         format!(
-            "FROST Provenance Mark Chain\nResolution: {}, Threshold: {} of {}\nParticipants: {}\nCharter: {}\nDate: {}",
+            "FROST Provenance Mark Chain\nResolution: {}, Threshold: {} of {}\nParticipants: {}\nCharter: {}\nDate: {}\nInfo Hash: {}",
             res,
             config.min_signers(),
             participant_names.len(),
             participant_names.join(", "),
             config.charter(),
-            date
+            date,
+            info_hash
         )
     }
 
@@ -115,7 +123,7 @@ impl FrostPmChain {
         //    signature
         // Build M0 from group configuration including charter and participant
         // names
-        let genesis_msg = Self::message_0(group.config(), res, date);
+        let genesis_msg = Self::message_0(group.config(), res, date, info.clone());
         let m0 = genesis_msg.as_bytes();
 
         // Verify the provided signature against the genesis message

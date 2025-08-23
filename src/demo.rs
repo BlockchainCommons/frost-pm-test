@@ -1,5 +1,4 @@
 use anyhow::{Result, bail};
-use bc_crypto::sha256;
 use dcbor::Date;
 use frost_pm_test::{FrostGroup, FrostGroupConfig, pm_chain::FrostPmChain};
 use provenance_mark::ProvenanceMarkResolution;
@@ -45,14 +44,13 @@ pub fn run_demo() -> Result<()> {
         // Genesis data
         let artwork_name =
             format!("Digital artwork collection #{} - 2024", i + 1);
-        let obj_hash1 = sha256(artwork_name.as_bytes());
 
         println!("   Collection: \"{}\"", artwork_name);
-        println!("   Genesis hash: {}", hex::encode(&obj_hash1));
 
         // Client generates genesis message and signs it
         let date_0 = Date::now();
-        let message_0 = FrostPmChain::message_0(group.config(), *res, &date_0);
+        let info_0 = Some(artwork_name);
+        let message_0 = FrostPmChain::message_0(group.config(), *res, &date_0, info_0.clone());
         let (commitments_0, nonces_0) =
             group.round_1_commit(&["Alice", "Bob"], &mut OsRng)?;
         let signature_0 = group.round_2_sign(
@@ -71,7 +69,7 @@ pub fn run_demo() -> Result<()> {
             FrostPmChain::new_chain(
                 *res,
                 &date_0,
-                Some(artwork_name),
+                info_0,
                 group.clone(),
                 signature_0,
                 &commitments_1,

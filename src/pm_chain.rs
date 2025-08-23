@@ -11,7 +11,6 @@ use std::collections::BTreeMap;
 #[derive(Clone, Debug)]
 pub struct PrecommitReceipt {
     pub seq: u32,
-    pub root: [u8; 32],
 }
 
 /// Check if the candidate nextKey matches what the previous mark committed to
@@ -151,7 +150,6 @@ impl FrostPmChain {
 
         let receipt_1 = PrecommitReceipt {
             seq: 1,
-            root: root_1,
         };
 
         Ok((chain, mark_0, receipt_1, root_1))
@@ -186,11 +184,7 @@ impl FrostPmChain {
             );
         }
 
-        let root = if let Some(r) = receipt_root {
-            r
-        } else {
-            receipt.root
-        };
+        let root = receipt_root.unwrap();
 
         // 2. Derive key from the receipt's root (which matches the commitments)
         let key =
@@ -230,7 +224,6 @@ impl FrostPmChain {
 
         let next_receipt = PrecommitReceipt {
             seq: next_seq,
-            root: next_root,
         };
 
         Ok((mark, next_receipt, next_root, next_commitments))

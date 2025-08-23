@@ -52,8 +52,13 @@ pub fn run_demo() -> Result<()> {
 
         // Client generates genesis message and signs it
         let message_0 = FrostPmChain::genesis_message(group.config(), *res);
-        let signature_0 =
-            group.sign(message_0.as_bytes(), &["alice", "bob"], &mut OsRng)?;
+        let (commitments_0, nonces_0) = group.round_1_commit(&["alice", "bob"], &mut OsRng)?;
+        let signature_0 = group.round_2_sign(
+            &["alice", "bob"],
+            &commitments_0,
+            &nonces_0,
+            message_0.as_bytes(),
+        )?;
 
         // Client generates Round-1 commitments for seq=1
         let (commitments_1, nonces_1) =

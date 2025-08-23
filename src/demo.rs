@@ -27,17 +27,17 @@ pub fn run_demo() -> Result<()> {
     println!("   ✓ FROST group created successfully\n");
 
     let resolutions = [
-        (ProvenanceMarkResolution::Low, "Low", "🔵"),
-        (ProvenanceMarkResolution::Medium, "Medium", "🟡"),
-        (ProvenanceMarkResolution::Quartile, "Quartile", "🟠"),
-        (ProvenanceMarkResolution::High, "High", "🔴"),
+        (ProvenanceMarkResolution::Low, "🔵"),
+        (ProvenanceMarkResolution::Medium, "🟡"),
+        (ProvenanceMarkResolution::Quartile, "🟠"),
+        (ProvenanceMarkResolution::High, "🔴"),
     ];
 
-    for (i, (res, name, icon)) in resolutions.iter().enumerate() {
+    for (i, (res, icon)) in resolutions.iter().enumerate() {
         println!(
             "{} ═══ {} Resolution Demo - {} Mark Chain ({} bytes) ═══",
             icon,
-            name,
+            res,
             MARK_COUNT,
             res.link_length()
         );
@@ -141,8 +141,10 @@ pub fn run_demo() -> Result<()> {
         println!(" ✓ Complete!");
 
         // Show sample marks from the chain
-        let last_mark = &all_marks[99];
-        let mid_mark = &all_marks[49];
+        let last_mark_index = MARK_COUNT - 1;
+        let mid_mark_index = MARK_COUNT / 2 - 1;
+        let last_mark = &all_marks[last_mark_index];
+        let mid_mark = &all_marks[mid_mark_index];
         println!("   Sample marks:");
         println!(
             "     Mark #1:  {} (seq={})",
@@ -150,18 +152,20 @@ pub fn run_demo() -> Result<()> {
             all_marks[1].seq()
         );
         println!(
-            "     Mark #50: {} (seq={})",
+            "     Mark #{}: {} (seq={})",
+            mid_mark_index + 1,
             mid_mark.identifier(),
             mid_mark.seq()
         );
         println!(
-            "     Mark #100: {} (seq={})",
+            "     Mark #{}: {} (seq={})",
+            last_mark_index + 1,
             last_mark.identifier(),
             last_mark.seq()
         );
 
         // Comprehensive chain validation
-        print!("   Validating 100-mark chain... ");
+        print!("   Validating {}-mark chain... ", MARK_COUNT);
         let start_time = std::time::Instant::now();
 
         let genesis_check = all_marks[0].is_genesis();
@@ -171,7 +175,7 @@ pub fn run_demo() -> Result<()> {
         // Spot check precedence for performance (checking all 99 links would be
         // slow)
         let mut spot_checks_passed = 0;
-        let check_indices = [0, 10, 25, 49, 74, 90, 98]; // Sample of indices to check
+        let check_indices: Vec<usize> = (0..MARK_COUNT - 1).step_by((MARK_COUNT - 1) / 7).collect();
         for &i in &check_indices {
             if all_marks[i].precedes(&all_marks[i + 1]) {
                 spot_checks_passed += 1;
@@ -212,15 +216,15 @@ pub fn run_demo() -> Result<()> {
             && resolution_consistent
         {
             println!(
-                "   {} {} resolution 100-mark chain verified successfully!\n",
-                icon, name
+                "   {} {} resolution {}-mark chain verified successfully!\n",
+                icon, res, MARK_COUNT
             );
         } else {
-            bail!("Chain verification failed for {} resolution", name);
+            bail!("Chain verification failed for {} resolution", res);
         }
     }
 
-    println!("🎉 100-Mark Chain Demo Complete!");
+    println!("🎉 {}-Mark Chain Demo Complete!", MARK_COUNT);
 
     Ok(())
 }

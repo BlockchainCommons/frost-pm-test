@@ -60,12 +60,11 @@ pub fn run_demo() -> Result<()> {
             group.round_1_commit(&["alice", "bob"], &mut OsRng)?;
 
         // Genesis
-        let (mut chain, mark_0, mut current_receipt) = FrostPmChain::new_chain(
+        let (mut chain, mark_0, mut current_receipt, mut current_root) = FrostPmChain::new_chain(
             group.clone(),
             signature_0,
             &commitments_1,
             *res,
-            &["alice", "bob"],
             Date::now(),
             Some(artwork_name),
         )?;
@@ -111,16 +110,17 @@ pub fn run_demo() -> Result<()> {
                 chain.group().round_1_commit(signers, &mut OsRng)?;
 
             let (mark, new_receipt, next_commitments) = chain.append_mark(
-                signers,
                 current_date,
                 Some(content),
                 &current_receipt,
+                Some(current_root),
                 signature,
                 next_commitments,
             )?;
 
             // Update for next iteration
             current_nonces = new_nonces;
+            current_root = new_receipt.root.clone();
             current_receipt = new_receipt;
             current_commitments = next_commitments;
 

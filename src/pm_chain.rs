@@ -101,16 +101,12 @@ impl FrostPmChain {
     // precommit data for seq=1
     pub fn new_chain(
         group: FrostGroup,
-        genesis_message_signature: frost_ed25519::Signature,
+        signature_0: frost_ed25519::Signature,
         commitments_1: &BTreeMap<Identifier, SigningCommitments>,
         res: ProvenanceMarkResolution,
-        signers: &[&str],
         date: Date,
         info: Option<impl CBOREncodable>,
-    ) -> Result<(Self, ProvenanceMark, PrecommitReceipt)> {
-        if signers.len() < group.min_signers() as usize {
-            bail!("insufficient signers");
-        }
+    ) -> Result<(Self, ProvenanceMark, PrecommitReceipt, [u8; 32])> {
         let link_len = res.link_length();
 
         // 1. Derive key_0 (and thus id) using the provided genesis message signature
@@ -119,10 +115,10 @@ impl FrostPmChain {
         let m0 = genesis_msg.as_bytes();
 
         // Verify the provided signature against the genesis message
-        group.verify(&m0, &genesis_message_signature)?;
+        group.verify(&m0, &signature_0)?;
 
         let key_0 = hkdf_hmac_sha256(
-            &genesis_message_signature.serialize()?,
+            &signature_0.serialize()?,
             &m0,
             link_len,
         );
@@ -158,7 +154,7 @@ impl FrostPmChain {
             root: root_1,
         };
 
-        Ok((chain, mark_0, receipt_1))
+        Ok((chain, mark_0, receipt_1, root_1))
     }
 
     /// Append the next mark using precommitted Round-1 commitments
@@ -167,17 +163,13 @@ impl FrostPmChain {
     /// Returns the new mark and the precommit receipt for the next round
     pub fn append_mark(
         &mut self,
-        signers: &[&str],
         date: Date,
         info: Option<impl CBOREncodable>,
         receipt: &PrecommitReceipt,
+        receipt_root: Option<[u8; 32]>,
         signature: frost_ed25519::Signature,
         next_commitments: BTreeMap<Identifier, SigningCommitments>,
     ) -> Result<(ProvenanceMark, PrecommitReceipt, BTreeMap<Identifier, SigningCommitments>)> {
-        if signers.len() < self.group.min_signers() as usize {
-            bail!("insufficient signers");
-        }
-
         // Check date monotonicity against the last mark's date
         if date < *self.last_mark.date() {
             bail!("date monotonicity violated");
@@ -194,9 +186,15 @@ impl FrostPmChain {
             );
         }
 
+        let root = if let Some(r) = receipt_root {
+            r
+        } else {
+            receipt.root
+        };
+
         // 2. Derive key from the receipt's root (which matches the commitments)
         let key =
-            Self::kdf_next(self.chain_id(), seq, receipt.root, self.res());
+            Self::kdf_next(self.chain_id(), seq, root, self.res());
 
         // 3. Verify that this key matches what the previous mark committed to
         if !prev_commitment_matches(&self.last_mark, &key)? {

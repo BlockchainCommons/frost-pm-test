@@ -28,12 +28,11 @@ fn frost_controls_pm_chain() -> Result<()> {
         group.round_1_commit(&["alice", "bob"], &mut OsRng)?;
 
     // Genesis from alice+bob
-    let (mut chain, mark_0, receipt) = FrostPmChain::new_chain(
+    let (mut chain, mark_0, receipt, root_1) = FrostPmChain::new_chain(
         group.clone(),
         genesis_signature,
         &seq1_commitments,
         res,
-        &["alice", "bob"],
         Date::now(),
         Some(image_content),
     )?;
@@ -64,10 +63,10 @@ fn frost_controls_pm_chain() -> Result<()> {
         .round_1_commit(&["alice", "bob"], &mut OsRng)?;
 
     let (mark1, receipt, receipt_commitments) = chain.append_mark(
-        &["alice", "bob"], // Use same participants as genesis precommit
         mark2_date,
         Some(image2_content),
         &receipt,
+        Some(root_1),
         signature,
         seq2_commitments,
     )?;
@@ -97,10 +96,10 @@ fn frost_controls_pm_chain() -> Result<()> {
         .round_1_commit(&["alice", "bob"], &mut OsRng)?;
 
     let (mark2, _receipt, _receipt_commitments) = chain.append_mark(
-        &["alice", "bob"], // Use same participants as mark1 precommit
         mark3_date,
         Some(image3_content),
         &receipt,
+        Some(receipt.root),
         signature3,
         seq3_commitments,
     )?;
@@ -139,55 +138,6 @@ fn frost_controls_pm_chain() -> Result<()> {
 }
 
 #[test]
-fn frost_pm_chain_insufficient_signers_fails() -> Result<()> {
-    let config = FrostGroupConfig::new(
-        2,
-        &["alice", "bob", "charlie"],
-        "Insufficient signers test chain".to_string(),
-    )?;
-    let res = ProvenanceMarkResolution::Medium;
-    let genesis_msg = FrostPmChain::genesis_message(&config, res);
-    let group = FrostGroup::new_with_trusted_dealer(config, &mut OsRng)?;
-
-    // Generate genesis message and try to sign with insufficient signers - this should fail at signing stage
-    let sign_result =
-        group.sign(genesis_msg.as_bytes(), &["alice"], &mut OsRng); // Only 1 signer, but threshold is 2
-
-    // The signing should fail due to insufficient signers
-    assert!(sign_result.is_err());
-
-    // But let's also test that new_genesis would fail if somehow we got a signature
-    // We'll create a valid signature first
-    let valid_signature =
-        group.sign(genesis_msg.as_bytes(), &["alice", "bob"], &mut OsRng)?;
-
-    // We also need valid commitments for the test
-    let (seq1_commitments, _seq1_nonces) =
-        group.round_1_commit(&["alice", "bob"], &mut OsRng)?;
-
-    // Try to create genesis with only 1 signer in the signers list (threshold validation)
-    let result = FrostPmChain::new_chain(
-        group,
-        valid_signature,
-        &seq1_commitments,
-        res,
-        &["alice"], // Only 1 signer, but threshold is 2
-        Date::now(),
-        Some("test content"),
-    );
-
-    assert!(result.is_err());
-    assert!(
-        result
-            .unwrap_err()
-            .to_string()
-            .contains("insufficient signers")
-    );
-
-    Ok(())
-}
-
-#[test]
 fn frost_pm_chain_date_monotonicity() -> Result<()> {
     let config = FrostGroupConfig::new(
         2,
@@ -207,12 +157,11 @@ fn frost_pm_chain_date_monotonicity() -> Result<()> {
         group.round_1_commit(&["alice", "bob"], &mut OsRng)?;
 
     let genesis_time = Date::now();
-    let (mut chain, _mark_0, receipt) = FrostPmChain::new_chain(
+    let (mut chain, _mark_0, receipt, _root_1) = FrostPmChain::new_chain(
         group,
         genesis_signature,
         &seq1_commitments,
         res,
-        &["alice", "bob"],
         genesis_time.clone(),
         Some("test content"),
     )?;
@@ -241,10 +190,10 @@ fn frost_pm_chain_date_monotonicity() -> Result<()> {
         .round_1_commit(&["alice", "bob"], &mut OsRng)?;
 
     let result = chain.append_mark(
-        &["alice", "bob"], // Use same participants as genesis precommit
         earlier_time,
         Some("test content 2"),
         &receipt,
+        None,
         signature_fail,
         dummy_commitments,
     );
@@ -284,12 +233,11 @@ fn frost_pm_different_signer_combinations() -> Result<()> {
         group.round_1_commit(&["alice", "bob", "charlie"], &mut OsRng)?;
 
     // Genesis with alice, bob, charlie
-    let (mut chain, mark_0, receipt) = FrostPmChain::new_chain(
+    let (mut chain, mark_0, receipt, _root_1) = FrostPmChain::new_chain(
         group.clone(),
         genesis_signature,
         &seq1_commitments,
         res,
-        &["alice", "bob", "charlie"],
         Date::now(),
         Some("test content 1"),
     )?;
@@ -314,10 +262,10 @@ fn frost_pm_different_signer_combinations() -> Result<()> {
         .round_1_commit(&["alice", "bob", "charlie"], &mut OsRng)?;
 
     let (mark1, _receipt, _receipt_commitments) = chain.append_mark(
-        &["alice", "bob", "charlie"], // Use same participants as genesis precommit
         mark_date,
         Some("test content 2"),
         &receipt,
+        None,
         signature_next,
         next_commitments,
     )?;
@@ -372,12 +320,11 @@ fn frost_pm_all_resolutions() -> Result<()> {
             group.round_1_commit(&["alice", "bob"], &mut OsRng)?;
 
         // Genesis
-        let (mut chain, mark_0, receipt) = FrostPmChain::new_chain(
+        let (mut chain, mark_0, receipt, _root_1) = FrostPmChain::new_chain(
             group.clone(),
             genesis_signature,
             &seq1_commitments,
             res,
-            &["alice", "bob"],
             Date::now(),
             Some("test content 1"),
         )?;
@@ -413,10 +360,10 @@ fn frost_pm_all_resolutions() -> Result<()> {
             .round_1_commit(&["alice", "bob"], &mut OsRng)?;
 
         let (mark1, receipt, receipt_commitments) = chain.append_mark(
-            &["alice", "bob"], // Same participants as genesis precommit
             mark2_date,
             Some("test content 2"),
             &receipt,
+            None,
             signature2,
             seq2_commitments,
         )?;
@@ -452,10 +399,10 @@ fn frost_pm_all_resolutions() -> Result<()> {
             .round_1_commit(&["alice", "bob"], &mut OsRng)?;
 
         let (mark2, _receipt, _receipt_commitments) = chain.append_mark(
-            &["alice", "bob"], // Same participants as mark1 precommit
             mark3_date,
             Some("test content 3"),
             &receipt,
+            None,
             signature3,
             seq3_commitments,
         )?;

@@ -51,7 +51,7 @@ pub fn run_demo() -> Result<()> {
         println!("   Genesis hash: {}", hex::encode(&obj_hash1));
 
         // Client generates genesis message and signs it
-        let message_0 = FrostPmChain::genesis_message(group.config(), *res);
+        let message_0 = FrostPmChain::message_0(group.config(), *res);
         let (commitments_0, nonces_0) =
             group.round_1_commit(&["Alice", "Bob"], &mut OsRng)?;
         let signature_0 = group.round_2_sign(
@@ -66,7 +66,7 @@ pub fn run_demo() -> Result<()> {
             group.round_1_commit(&["Alice", "Bob"], &mut OsRng)?;
 
         // Genesis
-        let (mut chain, mark_0, mut current_root) =
+        let (mut chain, mark_0) =
             FrostPmChain::new_chain(
                 group.clone(),
                 signature_0,
@@ -97,7 +97,7 @@ pub fn run_demo() -> Result<()> {
             let current_date = Date::now();
 
             // Client generates message and Round-2 signature
-            let message = FrostPmChain::next_mark_message(
+            let message = FrostPmChain::message_next(
                 &chain,
                 current_date.clone(),
                 Some(content.clone()),
@@ -116,18 +116,17 @@ pub fn run_demo() -> Result<()> {
             let (next_commitments, new_nonces) =
                 chain.group().round_1_commit(signers, &mut OsRng)?;
 
-            let (mark, new_root) = chain
+            let mark = chain
                 .append_mark(
                     current_date,
                     Some(content),
-                    Some(current_root),
+                    &current_commitments,
                     signature,
                     &next_commitments,
                 )?;
 
             // Update for next iteration
             current_nonces = new_nonces;
-            current_root = new_root;
             current_commitments = next_commitments;
 
             all_marks.push(mark);

@@ -100,7 +100,7 @@ fn test_genesis_message_integration_with_pm_chain()
     )?;
 
     let res = ProvenanceMarkResolution::Medium;
-    let message_0 = FrostPmChain::genesis_message(&config, res);
+    let message_0 = FrostPmChain::message_0(&config, res);
 
     let mut rng = rand::thread_rng();
     let group = FrostGroup::new_with_trusted_dealer(config, &mut rng)?;
@@ -121,7 +121,7 @@ fn test_genesis_message_integration_with_pm_chain()
 
     // Create a provenance mark chain - this now takes the pre-signed genesis
     // message and precommit data
-    let (_chain, genesis_mark, _root_1) = FrostPmChain::new_chain(
+    let (_chain, genesis_mark) = FrostPmChain::new_chain(
         group,
         signature_0,
         &seq1_commitments,

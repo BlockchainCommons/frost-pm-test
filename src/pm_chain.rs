@@ -36,19 +36,27 @@ pub struct FrostPmChain {
 
 impl FrostPmChain {
     /// Get the resolution from the last mark
-    fn res(&self) -> ProvenanceMarkResolution { self.last_mark.res() }
+    fn res(&self) -> ProvenanceMarkResolution {
+        self.last_mark.res()
+    }
 
     /// Get the chain ID from the last mark
-    fn chain_id(&self) -> &[u8] { self.last_mark.chain_id() }
+    fn chain_id(&self) -> &[u8] {
+        self.last_mark.chain_id()
+    }
 
     /// Get the next sequence number for the chain
-    fn next_seq(&self) -> u32 { self.last_mark.seq() + 1 }
+    fn next_seq(&self) -> u32 {
+        self.last_mark.seq() + 1
+    }
 
     /// Get a reference to the underlying FROST group (for client use)
-    pub fn group(&self) -> &FrostGroup { &self.group }
+    pub fn group(&self) -> &FrostGroup {
+        &self.group
+    }
 
     /// Create a genesis message for a group (static version for new_genesis)
-    pub fn genesis_message(
+    pub fn message_0(
         config: &FrostGroupConfig,
         res: ProvenanceMarkResolution,
     ) -> String {
@@ -64,7 +72,7 @@ impl FrostPmChain {
         )
     }
 
-    pub fn next_mark_message(
+    pub fn message_next(
         self: &Self,
         date: Date,
         info: Option<impl CBOREncodable>,
@@ -94,14 +102,14 @@ impl FrostPmChain {
         res: ProvenanceMarkResolution,
         date: Date,
         info: Option<impl CBOREncodable>,
-    ) -> Result<(Self, ProvenanceMark, [u8; 32])> {
+    ) -> Result<(Self, ProvenanceMark)> {
         let link_len = res.link_length();
 
         // 1. Derive key_0 (and thus id) using the provided genesis message
         //    signature
         // Build M0 from group configuration including charter and participant
         // names
-        let genesis_msg = Self::genesis_message(group.config(), res);
+        let genesis_msg = Self::message_0(group.config(), res);
         let m0 = genesis_msg.as_bytes();
 
         // Verify the provided signature against the genesis message
@@ -135,7 +143,7 @@ impl FrostPmChain {
         // 4. Create the chain with the genesis mark
         let chain = Self { group, last_mark: mark_0.clone() };
 
-        Ok((chain, mark_0, root_1))
+        Ok((chain, mark_0))
     }
 
     /// Append the next mark using precommitted Round-1 commitments
@@ -146,20 +154,17 @@ impl FrostPmChain {
         &mut self,
         date: Date,
         info: Option<impl CBOREncodable>,
-        receipt_root: Option<[u8; 32]>,
+        commitments: &BTreeMap<Identifier, SigningCommitments>,
         signature: frost_ed25519::Signature,
         next_commitments: &BTreeMap<Identifier, SigningCommitments>,
-    ) -> Result<(
-        ProvenanceMark,
-        [u8; 32]
-    )> {
+    ) -> Result<ProvenanceMark> {
         // Check date monotonicity against the last mark's date
         if date < *self.last_mark.date() {
             bail!("date monotonicity violated");
         }
 
         let seq = self.next_seq();
-        let root = receipt_root.unwrap();
+        let root = Self::commitments_root(commitments);
 
         // 2. Derive key from the receipt's root (which matches the commitments)
         let key = Self::kdf_next(self.chain_id(), seq, root, self.res());
@@ -172,8 +177,7 @@ impl FrostPmChain {
         }
 
         // 4. Build message for Round-2 signing (standard PM message format)
-        let message =
-            Self::next_mark_message(&self, date.clone(), info.clone());
+        let message = Self::message_next(&self, date.clone(), info.clone());
 
         // 5. VERIFY the provided signature under the group verifying key
         self.group.verify(&message, &signature)?;
@@ -196,7 +200,7 @@ impl FrostPmChain {
         // 8. Store the new mark
         self.last_mark = next_mark.clone();
 
-        Ok((next_mark, next_root))
+        Ok(next_mark)
     }
 
     /// Compute a deterministic root over Round-1 commitment map

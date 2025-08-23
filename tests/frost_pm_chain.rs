@@ -78,10 +78,10 @@ fn frost_controls_pm_chain() -> Result<()> {
             commitments_2,
         )?;
 
-    println!("Second mark created: {}", mark_1.identifier());
+    println!("Mark 1 created: {}", mark_1.identifier());
 
-    // Create third mark with yet another "image"
-    let content_3 = "third image bytes";
+    // Create mark 2 with yet another "image"
+    let content_3 = "mark 2 image bytes";
     let date_3 = Date::now();
 
     // Client generates message and Round-2 signature
@@ -363,7 +363,7 @@ fn frost_pm_all_resolutions() -> Result<()> {
             mark_0.key().len()
         );
 
-        // Second mark
+        // Mark 1
         let date_1 = Date::now();
         let message_1 = FrostPmChain::next_mark_message(
             &chain,
@@ -397,12 +397,12 @@ fn frost_pm_all_resolutions() -> Result<()> {
         assert_eq!(mark_1.key().len(), expected_link_len);
         assert_eq!(mark_1.chain_id(), mark_0.chain_id());
         println!(
-            "  ✓ Second mark: {} ({})",
+            "  ✓ Mark 1: {} ({})",
             mark_1.identifier(),
             mark_1.key().len()
         );
 
-        // Third mark
+        // Mark 2
         let date_2 = Date::now();
         let message_2 = FrostPmChain::next_mark_message(
             &chain,

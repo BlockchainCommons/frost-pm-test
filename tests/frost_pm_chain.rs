@@ -52,7 +52,7 @@ fn frost_controls_pm_chain() -> Result<()> {
 
     // Client generates message and Round-2 signature
     let message =
-        FrostPmChain::message_next(&chain, date_1.clone(), Some(info_1));
+        chain.message_next(date_1.clone(), Some(info_1));
     let signature_1 = chain.group().round_2_sign(
         signers,
         &commitments_1,
@@ -75,17 +75,17 @@ fn frost_controls_pm_chain() -> Result<()> {
     println!("Mark 1 created: {}", mark_1.identifier());
 
     // Create mark 2 with yet another "image"
-    let content_3 = "mark 2 image bytes";
-    let date_3 = Date::now();
+    let info_2 = "mark 2 image bytes";
+    let date_2 = Date::now();
 
     // Client generates message and Round-2 signature
-    let message_3 =
-        FrostPmChain::message_next(&chain, date_3.clone(), Some(content_3));
-    let signature_3 = chain.group().round_2_sign(
+    let message_2 =
+        chain.message_next(date_2.clone(), Some(info_2));
+    let signature_2 = chain.group().round_2_sign(
         signers,
         &commitments_2,
         &nonces_2,
-        &message_3,
+        &message_2,
     )?;
 
     // Client generates commitments for seq=3 before calling append_mark
@@ -93,10 +93,10 @@ fn frost_controls_pm_chain() -> Result<()> {
         chain.group().round_1_commit(signers, &mut OsRng)?;
 
     let mark_2 = chain.append_mark(
-        date_3,
-        Some(content_3),
+        date_2,
+        Some(info_2),
         &commitments_2,
-        signature_3,
+        signature_2,
         &commitments_3,
     )?;
 
@@ -174,8 +174,7 @@ fn frost_pm_chain_date_monotonicity() -> Result<()> {
         Date::from_datetime(date_0.datetime() - chrono::Duration::seconds(60));
 
     // Even though this will fail, we need to provide a signature
-    let message_fail = FrostPmChain::message_next(
-        &chain,
+    let message_fail = chain.message_next(
         earlier_date.clone(),
         Some("test content 2"),
     );
@@ -249,8 +248,7 @@ fn frost_pm_different_signer_combinations() -> Result<()> {
 
     // Next mark with same participants as genesis precommit
     let date_1 = Date::now();
-    let message_1 = FrostPmChain::message_next(
-        &chain,
+    let message_1 = chain.message_next(
         date_1.clone(),
         Some("test content 2"),
     );
@@ -296,16 +294,16 @@ fn frost_pm_all_resolutions() -> Result<()> {
     let group = FrostGroup::new_with_trusted_dealer(config, &mut OsRng)?;
 
     let resolutions = [
-        (ProvenanceMarkResolution::Low, "Low", 4),
-        (ProvenanceMarkResolution::Medium, "Medium", 8),
-        (ProvenanceMarkResolution::Quartile, "Quartile", 16),
-        (ProvenanceMarkResolution::High, "High", 32),
+        ProvenanceMarkResolution::Low,
+        ProvenanceMarkResolution::Medium,
+        ProvenanceMarkResolution::Quartile,
+        ProvenanceMarkResolution::High,
     ];
 
-    for (res, name, expected_link_len) in resolutions {
+    for res in resolutions {
         println!(
             "Testing {} resolution ({}-byte links)",
-            name, expected_link_len
+            res, res.link_length()
         );
 
         // Test data for this resolution
@@ -341,7 +339,7 @@ fn frost_pm_all_resolutions() -> Result<()> {
         assert!(mark_0.is_genesis());
         assert_eq!(mark_0.res(), res);
         assert_eq!(mark_0.seq(), 0);
-        assert_eq!(mark_0.key().len(), expected_link_len);
+        assert_eq!(mark_0.key().len(), res.link_length());
         assert_eq!(mark_0.chain_id(), mark_0.key()); // Genesis invariant
         println!(
             "  ✓ Genesis mark: {} ({})",
@@ -351,8 +349,7 @@ fn frost_pm_all_resolutions() -> Result<()> {
 
         // Mark 1
         let date_1 = Date::now();
-        let message_1 = FrostPmChain::message_next(
-            &chain,
+        let message_1 = chain.message_next(
             date_1.clone(),
             Some("test content 2"),
         );
@@ -378,7 +375,7 @@ fn frost_pm_all_resolutions() -> Result<()> {
         // Verify chain properties
         assert_eq!(mark_1.seq(), 1);
         assert_eq!(mark_1.res(), res);
-        assert_eq!(mark_1.key().len(), expected_link_len);
+        assert_eq!(mark_1.key().len(), res.link_length());
         assert_eq!(mark_1.chain_id(), mark_0.chain_id());
         println!(
             "  ✓ Mark 1: {} ({})",
@@ -388,8 +385,7 @@ fn frost_pm_all_resolutions() -> Result<()> {
 
         // Mark 2
         let date_2 = Date::now();
-        let message_2 = FrostPmChain::message_next(
-            &chain,
+        let message_2 = chain.message_next(
             date_2.clone(),
             Some("test content 3"),
         );
@@ -415,7 +411,7 @@ fn frost_pm_all_resolutions() -> Result<()> {
         // Verify chain properties
         assert_eq!(mark_2.seq(), 2);
         assert_eq!(mark_2.res(), res);
-        assert_eq!(mark_2.key().len(), expected_link_len);
+        assert_eq!(mark_2.key().len(), res.link_length());
         assert_eq!(mark_2.chain_id(), mark_0.chain_id());
         println!(
             "  ✓ Third mark: {} ({})",
@@ -429,7 +425,7 @@ fn frost_pm_all_resolutions() -> Result<()> {
         assert!(mark_0.precedes(&mark_1));
         assert!(mark_1.precedes(&mark_2));
 
-        println!("  ✓ Chain integrity verified for {} resolution\n", name);
+        println!("  ✓ Chain integrity verified for {} resolution\n", res);
     }
 
     Ok(())

@@ -93,14 +93,13 @@ pub fn run_demo() -> Result<()> {
         print!("   Creating marks: ");
         for seq in 1..MARK_COUNT {
             // Vary the content for each mark
-            let content = format!("Edition #{} of collection #{}", seq, i + 1);
+            let info = format!("Edition #{} of collection #{}", seq, i + 1);
             let current_date = Date::now();
 
             // Client generates message and Round-2 signature
-            let message = FrostPmChain::message_next(
-                &chain,
+            let message = chain.message_next(
                 current_date.clone(),
-                Some(content.clone()),
+                Some(info.clone()),
             );
 
             let signers = &["Alice", "Bob"];
@@ -119,7 +118,7 @@ pub fn run_demo() -> Result<()> {
             let mark = chain
                 .append_mark(
                     current_date,
-                    Some(content),
+                    Some(info),
                     &current_commitments,
                     signature,
                     &next_commitments,

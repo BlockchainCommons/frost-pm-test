@@ -73,7 +73,7 @@ impl FrostPmChain {
     }
 
     pub fn message_next(
-        self: &Self,
+        &self,
         date: Date,
         info: Option<impl CBOREncodable>,
     ) -> Vec<u8> {
@@ -155,7 +155,7 @@ impl FrostPmChain {
         date: Date,
         info: Option<impl CBOREncodable>,
         commitments: &BTreeMap<Identifier, SigningCommitments>,
-        signature: frost_ed25519::Signature,
+        message_next_signature: frost_ed25519::Signature,
         next_commitments: &BTreeMap<Identifier, SigningCommitments>,
     ) -> Result<ProvenanceMark> {
         // Check date monotonicity against the last mark's date
@@ -180,7 +180,7 @@ impl FrostPmChain {
         let message = Self::message_next(&self, date.clone(), info.clone());
 
         // 5. VERIFY the provided signature under the group verifying key
-        self.group.verify(&message, &signature)?;
+        self.group.verify(&message, &message_next_signature)?;
 
         // 6. BEFORE finalizing this mark's hash, use provided commitments for
         //    seq+1

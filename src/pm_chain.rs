@@ -50,25 +50,27 @@ impl FrostPmChain {
         self.last_mark.seq() + 1
     }
 
-    /// Get a reference to the underlying FROST group (for client use)
+    /// Get a reference to the underlying FROST group
     pub fn group(&self) -> &FrostGroup {
         &self.group
     }
 
-    /// Create a genesis message for a group (static version for new_genesis)
+    /// Create a genesis message for a group
     pub fn message_0(
         config: &FrostGroupConfig,
         res: ProvenanceMarkResolution,
+        date: &Date,
     ) -> String {
         let participant_names: Vec<String> =
             config.participants().keys().cloned().collect();
         format!(
-            "FROST Provenance Mark Chain\nResolution: {}, Threshold: {} of {}\nParticipants: {}\nCharter: {}",
+            "FROST Provenance Mark Chain\nResolution: {}, Threshold: {} of {}\nParticipants: {}\nCharter: {}\nDate: {}",
             res,
             config.min_signers(),
             participant_names.len(),
             participant_names.join(", "),
-            config.charter()
+            config.charter(),
+            date
         )
     }
 
@@ -97,7 +99,7 @@ impl FrostPmChain {
     // precommit data for seq=1
     pub fn new_chain(
         res: ProvenanceMarkResolution,
-        date: Date,
+        date: &Date,
         info: Option<impl CBOREncodable>,
         group: FrostGroup,
         message_0_signature: frost_ed25519::Signature,
@@ -109,7 +111,7 @@ impl FrostPmChain {
         //    signature
         // Build M0 from group configuration including charter and participant
         // names
-        let genesis_msg = Self::message_0(group.config(), res);
+        let genesis_msg = Self::message_0(group.config(), res, date);
         let m0 = genesis_msg.as_bytes();
 
         // Verify the provided signature against the genesis message

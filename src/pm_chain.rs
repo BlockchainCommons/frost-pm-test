@@ -169,7 +169,7 @@ impl FrostPmChain {
         receipt_root: Option<[u8; 32]>,
         signature: frost_ed25519::Signature,
         next_commitments: BTreeMap<Identifier, SigningCommitments>,
-    ) -> Result<(ProvenanceMark, PrecommitReceipt, BTreeMap<Identifier, SigningCommitments>)> {
+    ) -> Result<(ProvenanceMark, PrecommitReceipt, [u8; 32], BTreeMap<Identifier, SigningCommitments>)> {
         // Check date monotonicity against the last mark's date
         if date < *self.last_mark.date() {
             bail!("date monotonicity violated");
@@ -233,7 +233,7 @@ impl FrostPmChain {
             root: next_root,
         };
 
-        Ok((mark, next_receipt, next_commitments))
+        Ok((mark, next_receipt, next_root, next_commitments))
     }
 
     /// Compute a deterministic root over Round-1 commitment map

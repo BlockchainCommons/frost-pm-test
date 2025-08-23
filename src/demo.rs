@@ -109,7 +109,7 @@ pub fn run_demo() -> Result<()> {
             let (next_commitments, new_nonces) =
                 chain.group().round_1_commit(signers, &mut OsRng)?;
 
-            let (mark, new_receipt, next_commitments) = chain.append_mark(
+            let (mark, new_receipt, new_root, next_commitments) = chain.append_mark(
                 current_date,
                 Some(content),
                 &current_receipt,
@@ -120,7 +120,7 @@ pub fn run_demo() -> Result<()> {
 
             // Update for next iteration
             current_nonces = new_nonces;
-            current_root = new_receipt.root.clone();
+            current_root = new_root;
             current_receipt = new_receipt;
             current_commitments = next_commitments;
 

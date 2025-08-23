@@ -62,7 +62,7 @@ fn frost_controls_pm_chain() -> Result<()> {
         .group()
         .round_1_commit(&["alice", "bob"], &mut OsRng)?;
 
-    let (mark1, receipt, receipt_commitments) = chain.append_mark(
+    let (mark1, receipt, _receipt_root, receipt_commitments) = chain.append_mark(
         mark2_date,
         Some(image2_content),
         &receipt,
@@ -95,7 +95,7 @@ fn frost_controls_pm_chain() -> Result<()> {
         .group()
         .round_1_commit(&["alice", "bob"], &mut OsRng)?;
 
-    let (mark2, _receipt, _receipt_commitments) = chain.append_mark(
+    let (mark2, _receipt, _receipt_root, _receipt_commitments) = chain.append_mark(
         mark3_date,
         Some(image3_content),
         &receipt,
@@ -261,7 +261,7 @@ fn frost_pm_different_signer_combinations() -> Result<()> {
         .group()
         .round_1_commit(&["alice", "bob", "charlie"], &mut OsRng)?;
 
-    let (mark1, _receipt, _receipt_commitments) = chain.append_mark(
+    let (mark1, _receipt, _receipt_root, _receipt_commitments) = chain.append_mark(
         mark_date,
         Some("test content 2"),
         &receipt,
@@ -359,7 +359,7 @@ fn frost_pm_all_resolutions() -> Result<()> {
             .group()
             .round_1_commit(&["alice", "bob"], &mut OsRng)?;
 
-        let (mark1, receipt, receipt_commitments) = chain.append_mark(
+        let (mark1, receipt, _receipt_root, receipt_commitments) = chain.append_mark(
             mark2_date,
             Some("test content 2"),
             &receipt,
@@ -398,7 +398,7 @@ fn frost_pm_all_resolutions() -> Result<()> {
             .group()
             .round_1_commit(&["alice", "bob"], &mut OsRng)?;
 
-        let (mark2, _receipt, _receipt_commitments) = chain.append_mark(
+        let (mark2, _receipt, _receipt_root, _receipt_commitments) = chain.append_mark(
             mark3_date,
             Some("test content 3"),
             &receipt,

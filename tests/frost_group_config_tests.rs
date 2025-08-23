@@ -86,7 +86,8 @@ fn test_config_validation() {
 }
 
 #[test]
-fn test_genesis_message_integration_with_pm_chain() -> Result<(), Box<dyn std::error::Error>> {
+fn test_genesis_message_integration_with_pm_chain()
+-> Result<(), Box<dyn std::error::Error>> {
     use dcbor::Date;
     use frost_pm_test::{FrostGroup, FrostPmChain};
     use provenance_mark::ProvenanceMarkResolution;
@@ -105,7 +106,8 @@ fn test_genesis_message_integration_with_pm_chain() -> Result<(), Box<dyn std::e
     let group = FrostGroup::new_with_trusted_dealer(config, &mut rng)?;
 
     // Client generates genesis message and signs it
-    let (commitments_0, nonces_0) = group.round_1_commit(&["Alice", "Bob"], &mut OsRng)?;
+    let (commitments_0, nonces_0) =
+        group.round_1_commit(&["Alice", "Bob"], &mut OsRng)?;
     let signature_0 = group.round_2_sign(
         &["Alice", "Bob"],
         &commitments_0,
@@ -117,7 +119,8 @@ fn test_genesis_message_integration_with_pm_chain() -> Result<(), Box<dyn std::e
     let (seq1_commitments, _seq1_nonces) =
         group.round_1_commit(&["Alice", "Bob"], &mut rng)?;
 
-    // Create a provenance mark chain - this now takes the pre-signed genesis message and precommit data
+    // Create a provenance mark chain - this now takes the pre-signed genesis
+    // message and precommit data
     let (_chain, genesis_mark, _receipt, _root_1) = FrostPmChain::new_chain(
         group,
         signature_0,

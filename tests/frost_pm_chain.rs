@@ -13,19 +13,26 @@ fn frost_controls_pm_chain() -> Result<()> {
         "Provenance mark chain demonstration".to_string(),
     )?;
     let res = ProvenanceMarkResolution::Quartile;
-    let genesis_msg = FrostPmChain::genesis_message(&config, res);
+    let message_0 = FrostPmChain::genesis_message(&config, res);
     let group = FrostGroup::new_with_trusted_dealer(config, &mut OsRng)?;
 
     // Fake "image" for genesis
     let image_content = "demo image bytes";
 
     // Client generates genesis message and signs it
-    let signature_0 =
-        group.sign(genesis_msg.as_bytes(), &["Alice", "Bob"], &mut OsRng)?;
+    let signers = &["Alice", "Bob"];
+    let (commitments_0, nonces_0) =
+        group.round_1_commit(signers, &mut OsRng)?;
+    let signature_0 = group.round_2_sign(
+        signers,
+        &commitments_0,
+        &nonces_0,
+        message_0.as_bytes(),
+    )?;
 
     // Client generates Round-1 commitments for seq=1
     let (commitments_1, nonces_1) =
-        group.round_1_commit(&["Alice", "Bob"], &mut OsRng)?;
+        group.round_1_commit(signers, &mut OsRng)?;
 
     // Genesis from Alice+Bob
     let (mut chain, mark_0, receipt, root_1) = FrostPmChain::new_chain(
@@ -51,16 +58,15 @@ fn frost_controls_pm_chain() -> Result<()> {
         Some(content_2),
     );
     let signature = chain.group().round_2_sign(
-        &["Alice", "Bob"],
+        signers,
         &commitments_1,
         &nonces_1,
         &message,
     )?;
 
     // Client generates commitments for seq=2 before calling append_mark
-    let (commitments_2, nonces_2) = chain
-        .group()
-        .round_1_commit(&["Alice", "Bob"], &mut OsRng)?;
+    let (commitments_2, nonces_2) =
+        chain.group().round_1_commit(signers, &mut OsRng)?;
 
     let (mark_1, receipt, receipt_root, receipt_commitments) = chain
         .append_mark(
@@ -85,16 +91,15 @@ fn frost_controls_pm_chain() -> Result<()> {
         Some(content_3),
     );
     let signature_3 = chain.group().round_2_sign(
-        &["Alice", "Bob"],
+        signers,
         &receipt_commitments,
         &nonces_2,
         &message_3,
     )?;
 
     // Client generates commitments for seq=3 before calling append_mark
-    let (commitments_3, _nonces_3) = chain
-        .group()
-        .round_1_commit(&["Alice", "Bob"], &mut OsRng)?;
+    let (commitments_3, _nonces_3) =
+        chain.group().round_1_commit(signers, &mut OsRng)?;
 
     let (mark_2, _receipt, _receipt_root, _receipt_commitments) = chain
         .append_mark(
@@ -151,12 +156,19 @@ fn frost_pm_chain_date_monotonicity() -> Result<()> {
     let res = ProvenanceMarkResolution::High;
     let message_0 = FrostPmChain::genesis_message(&config, res);
     let group = FrostGroup::new_with_trusted_dealer(config, &mut OsRng)?;
-    let signature_0 =
-        group.sign(message_0.as_bytes(), &["Alice", "Bob"], &mut OsRng)?;
+    let signers = &["Alice", "Bob"];
+    let (commitments_0, nonces_0) =
+        group.round_1_commit(signers, &mut OsRng)?;
+    let signature_0 = group.round_2_sign(
+        signers,
+        &commitments_0,
+        &nonces_0,
+        message_0.as_bytes(),
+    )?;
 
     // Client generates Round-1 commitments for seq=1
     let (commitments_1, nonces_1) =
-        group.round_1_commit(&["Alice", "Bob"], &mut OsRng)?;
+        group.round_1_commit(signers, &mut OsRng)?;
 
     let date_0 = Date::now();
     let (mut chain, _mark_0, receipt, root_1) = FrostPmChain::new_chain(
@@ -179,16 +191,15 @@ fn frost_pm_chain_date_monotonicity() -> Result<()> {
         Some("test content 2"),
     );
     let signature_fail = chain.group().round_2_sign(
-        &["Alice", "Bob"],
+        signers,
         &commitments_1,
         &nonces_1,
         &message_fail,
     )?;
 
     // Generate commitments for the test (even though it will fail)
-    let (dummy_commitments, _dummy_nonces) = chain
-        .group()
-        .round_1_commit(&["Alice", "Bob"], &mut OsRng)?;
+    let (dummy_commitments, _dummy_nonces) =
+        chain.group().round_1_commit(signers, &mut OsRng)?;
 
     let result = chain.append_mark(
         earlier_time,
@@ -223,15 +234,19 @@ fn frost_pm_different_signer_combinations() -> Result<()> {
     let group = FrostGroup::new_with_trusted_dealer(config, &mut OsRng)?;
 
     // Client generates genesis message and signs it
-    let signature_0 = group.sign(
+    let signers = &["Alice", "Bob", "Charlie"];
+    let (commitments_0, nonces_0) =
+        group.round_1_commit(signers, &mut OsRng)?;
+    let signature_0 = group.round_2_sign(
+        signers,
+        &commitments_0,
+        &nonces_0,
         message_0.as_bytes(),
-        &["Alice", "Bob", "Charlie"],
-        &mut OsRng,
     )?;
 
     // Client generates Round-1 commitments for seq=1
     let (commitments_1, nonces_1) =
-        group.round_1_commit(&["Alice", "Bob", "Charlie"], &mut OsRng)?;
+        group.round_1_commit(signers, &mut OsRng)?;
 
     // Genesis with Alice, Bob, Charlie
     let date_0 = Date::now();
@@ -252,16 +267,15 @@ fn frost_pm_different_signer_combinations() -> Result<()> {
         Some("test content 2"),
     );
     let signature_1 = chain.group().round_2_sign(
-        &["Alice", "Bob", "Charlie"],
+        signers,
         &commitments_1,
         &nonces_1,
         &message_1,
     )?;
 
     // Generate commitments for next sequence
-    let (commitments_2, _nonces_2) = chain
-        .group()
-        .round_1_commit(&["Alice", "Bob", "Charlie"], &mut OsRng)?;
+    let (commitments_2, _nonces_2) =
+        chain.group().round_1_commit(signers, &mut OsRng)?;
 
     let (mark_1, _receipt, _receipt_root, _receipt_commitments) = chain
         .append_mark(
@@ -312,10 +326,11 @@ fn frost_pm_all_resolutions() -> Result<()> {
 
         // Client generates genesis message and signs it
         let message_0 = FrostPmChain::genesis_message(group.config(), res);
+        let signers = &["Alice", "Bob"];
         let (commitments_0, nonces_0) =
-            group.round_1_commit(&["Alice", "Bob"], &mut OsRng)?;
+            group.round_1_commit(signers, &mut OsRng)?;
         let signature_0 = group.round_2_sign(
-            &["Alice", "Bob"],
+            signers,
             &commitments_0,
             &nonces_0,
             message_0.as_bytes(),
@@ -323,7 +338,7 @@ fn frost_pm_all_resolutions() -> Result<()> {
 
         // Client generates Round-1 commitments for seq=1
         let (commitments_1, nonces_1) =
-            group.round_1_commit(&["Alice", "Bob"], &mut OsRng)?;
+            group.round_1_commit(signers, &mut OsRng)?;
 
         // Genesis
         let date_0 = Date::now();
@@ -356,16 +371,15 @@ fn frost_pm_all_resolutions() -> Result<()> {
             Some("test content 2"),
         );
         let signature_1 = chain.group().round_2_sign(
-            &["Alice", "Bob"],
+            signers,
             &commitments_1,
             &nonces_1,
             &message_1,
         )?;
 
         // Generate commitments for seq=2
-        let (seq2_commitments, seq2_nonces) = chain
-            .group()
-            .round_1_commit(&["Alice", "Bob"], &mut OsRng)?;
+        let (seq2_commitments, seq2_nonces) =
+            chain.group().round_1_commit(signers, &mut OsRng)?;
 
         let (mark_1, receipt, receipt_root, receipt_commitments) = chain
             .append_mark(
@@ -396,16 +410,15 @@ fn frost_pm_all_resolutions() -> Result<()> {
             Some("test content 3"),
         );
         let signature_2 = chain.group().round_2_sign(
-            &["Alice", "Bob"],
+            signers,
             &receipt_commitments,
             &seq2_nonces,
             &message_2,
         )?;
 
         // Generate commitments for seq=3
-        let (seq3_commitments, _seq3_nonces) = chain
-            .group()
-            .round_1_commit(&["Alice", "Bob"], &mut OsRng)?;
+        let (seq3_commitments, _seq3_nonces) =
+            chain.group().round_1_commit(signers, &mut OsRng)?;
 
         let (mark_2, _receipt, _receipt_root, _receipt_commitments) = chain
             .append_mark(

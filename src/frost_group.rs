@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use anyhow::{Result, anyhow, bail};
 use frost_ed25519 as frost;
 use frost_ed25519::{
@@ -7,12 +9,12 @@ use frost_ed25519::{
     round2::SignatureShare,
 };
 use rand::{CryptoRng, RngCore};
-use std::collections::BTreeMap;
 
 use crate::frost_group_config::FrostGroupConfig;
 
 /// A fully constituted FROST group with all key material needed for signing
-/// This type abstracts away whether keys were generated via trusted dealer or DKG
+/// This type abstracts away whether keys were generated via trusted dealer or
+/// DKG
 #[derive(Debug, Clone)]
 pub struct FrostGroup {
     /// Configuration for the FROST group parameters
@@ -65,7 +67,8 @@ impl FrostGroup {
             );
         }
 
-        // Validate that all participant identifiers have corresponding key packages
+        // Validate that all participant identifiers have corresponding key
+        // packages
         for participant_id in config.participants().values() {
             if !key_packages.contains_key(participant_id) {
                 bail!(
@@ -79,14 +82,10 @@ impl FrostGroup {
     }
 
     /// Get the minimum number of signers required (threshold)
-    pub fn min_signers(&self) -> usize {
-        self.config.min_signers()
-    }
+    pub fn min_signers(&self) -> usize { self.config.min_signers() }
 
     /// Get the maximum number of participants
-    pub fn max_signers(&self) -> usize {
-        self.config.max_signers()
-    }
+    pub fn max_signers(&self) -> usize { self.config.max_signers() }
 
     /// Check if a participant name exists in this group
     pub fn has_participant(&self, name: &str) -> bool {
@@ -99,9 +98,7 @@ impl FrostGroup {
     }
 
     /// Get a reference to the group configuration
-    pub fn config(&self) -> &FrostGroupConfig {
-        &self.config
-    }
+    pub fn config(&self) -> &FrostGroupConfig { &self.config }
 
     /// Get a reference to a participant's key package by name
     pub fn key_package(&self, name: &str) -> Result<&KeyPackage> {
@@ -121,8 +118,8 @@ impl FrostGroup {
         self.public_key_package.verifying_key()
     }
 
-    /// Perform a complete signing ceremony with the specified signers and message
-    /// Takes participant names instead of identifiers
+    /// Perform a complete signing ceremony with the specified signers and
+    /// message Takes participant names instead of identifiers
     pub fn sign(
         &self,
         message: &[u8],
@@ -154,11 +151,8 @@ impl FrostGroup {
             commitments_map.insert(signer_name.to_string(), commitments);
         }
 
-        let signing_package = self.create_signing_package(
-            signers,
-            &commitments_map,
-            message,
-        )?;
+        let signing_package =
+            self.create_signing_package(signers, &commitments_map, message)?;
 
         // Round 2: Generate signature shares
         let mut signature_shares: BTreeMap<String, SignatureShare> =
@@ -189,8 +183,9 @@ impl FrostGroup {
     }
 
     /// Round-1 only: collect commitments for two-ceremony approach
-    /// Returns a map of Identifier -> SigningCommitments, and stores nonces locally
-    /// Participants must keep their SigningNonces until Round-2 completes
+    /// Returns a map of Identifier -> SigningCommitments, and stores nonces
+    /// locally Participants must keep their SigningNonces until Round-2
+    /// completes
     pub fn round_1_commit(
         &self,
         signers: &[&str],
@@ -228,7 +223,8 @@ impl FrostGroup {
     }
 
     /// Round-2: replay commitments and perform signing
-    /// Requires the same commitments from Round-1 and the nonces kept by participants
+    /// Requires the same commitments from Round-1 and the nonces kept by
+    /// participants
     pub fn round_2_sign(
         &self,
         signers: &[&str],
@@ -304,7 +300,8 @@ impl FrostGroup {
         Ok(frost::round2::sign(signing_package, nonces, key_package)?)
     }
 
-    /// Helper method to create a signing package from signer names and their commitments
+    /// Helper method to create a signing package from signer names and their
+    /// commitments
     fn create_signing_package(
         &self,
         signers: &[&str],
@@ -323,7 +320,8 @@ impl FrostGroup {
         Ok(SigningPackage::new(frost_commitments_map, message))
     }
 
-    /// Helper method to aggregate signature shares and create the final signature
+    /// Helper method to aggregate signature shares and create the final
+    /// signature
     fn aggregate_signature(
         &self,
         signing_package: &SigningPackage,

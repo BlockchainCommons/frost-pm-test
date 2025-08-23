@@ -80,13 +80,12 @@ fn test_group_insufficient_signers() -> Result<()> {
     let mut rng = rand::thread_rng();
 
     let group = FrostGroup::new_with_trusted_dealer(config, &mut rng)?;
-    let message = b"Test message";
 
     // Try to sign with only 1 signer (need 2 for threshold)
     let participant_names = group.participant_names();
     let insufficient_signers = vec![participant_names[0].as_str()];
 
-    let result = group.sign(message, &insufficient_signers, &mut rng);
+    let result = group.round_1_commit(&insufficient_signers, &mut OsRng);
     assert!(result.is_err());
     if let Err(error) = result {
         assert!(error.to_string().contains("Need at least 2 signers"));
@@ -115,7 +114,10 @@ fn test_corporate_board_signing() -> Result<()> {
         .collect();
     assert_eq!(signers.len(), 3);
 
-    let signature = group.sign(message, &signers, &mut rng)?;
+    // let signature = group.sign(message, &signers, &mut rng)?;
+    let (commitments, nonces) = group.round_1_commit(&signers, &mut OsRng)?;
+    let signature =
+        group.round_2_sign(&signers, &commitments, &nonces, message)?;
     assert!(group.verify(message, &signature).is_ok());
     Ok(())
 }
@@ -167,7 +169,9 @@ fn test_group_basic_functionality() -> Result<()> {
         .map(|s| s.as_str())
         .collect();
 
-    let signature = group.sign(message, &signers, &mut rng)?;
+    let (commitments, nonces) = group.round_1_commit(&signers, &mut OsRng)?;
+    let signature =
+        group.round_2_sign(&signers, &commitments, &nonces, message)?;
     assert!(group.verify(message, &signature).is_ok());
 
     // Verify wrong message fails verification

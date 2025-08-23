@@ -171,7 +171,8 @@ pub fn run_demo() -> Result<()> {
         let sequence_valid =
             provenance_mark::ProvenanceMark::is_sequence_valid(&all_marks);
 
-        // Spot check precedence for performance (checking all 99 links would be slow)
+        // Spot check precedence for performance (checking all 99 links would be
+        // slow)
         let mut spot_checks_passed = 0;
         let check_indices = [0, 10, 25, 49, 74, 90, 98]; // Sample of indices to check
         for &i in &check_indices {

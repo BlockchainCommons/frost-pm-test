@@ -16,6 +16,4 @@ mod demo;
 
 use anyhow::Result;
 
-fn main() -> Result<()> {
-    demo::run_demo()
-}
+fn main() -> Result<()> { demo::run_demo() }

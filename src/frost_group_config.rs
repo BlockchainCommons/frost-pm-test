@@ -1,6 +1,7 @@
+use std::collections::BTreeMap;
+
 use anyhow::{Result, bail};
 use frost_ed25519::Identifier;
-use std::collections::BTreeMap;
 
 /// Configuration for the FROST group parameters
 #[derive(Debug, Clone)]
@@ -16,8 +17,9 @@ pub struct FrostGroupConfig {
 }
 
 impl FrostGroupConfig {
-    /// Create a new FROSTGroupConfig with the specified threshold and participant names
-    /// The maximum number of signers is automatically derived from the participant names array
+    /// Create a new FROSTGroupConfig with the specified threshold and
+    /// participant names The maximum number of signers is automatically
+    /// derived from the participant names array
     pub fn new(
         min_signers: usize,
         participant_names: &[&'static str],
@@ -50,14 +52,10 @@ impl FrostGroupConfig {
     }
 
     /// Get the minimum number of signers required (threshold)
-    pub fn min_signers(&self) -> usize {
-        self.min_signers
-    }
+    pub fn min_signers(&self) -> usize { self.min_signers }
 
     /// Get the maximum number of participants
-    pub fn max_signers(&self) -> usize {
-        self.participants.len()
-    }
+    pub fn max_signers(&self) -> usize { self.participants.len() }
 
     /// Get the list of participant identifiers
     pub fn participant_ids(&self) -> Vec<Identifier> {
@@ -65,9 +63,7 @@ impl FrostGroupConfig {
     }
 
     /// Get the group's charter
-    pub fn charter(&self) -> &str {
-        &self.charter
-    }
+    pub fn charter(&self) -> &str { &self.charter }
 
     /// Get participant name by identifier
     pub fn participant_name(&self, id: &Identifier) -> &str {
@@ -94,7 +90,11 @@ impl FrostGroupConfig {
 
 impl Default for FrostGroupConfig {
     fn default() -> Self {
-        Self::new(2, &["Alice", "Bob", "Eve"], "Default FROST group for testing".to_string())
-            .expect("Default FROSTGroupConfig should be valid")
+        Self::new(
+            2,
+            &["Alice", "Bob", "Eve"],
+            "Default FROST group for testing".to_string(),
+        )
+        .expect("Default FROSTGroupConfig should be valid")
     }
 }

@@ -280,13 +280,13 @@ impl FrostPmChain {
             );
         }
 
-        // 2. Derive key_seq from the receipt's root (which matches the commitments)
-        let key_seq = kdf_next(self.chain_id(), seq, receipt.root, self.res());
+        // 2. Derive key from the receipt's root (which matches the commitments)
+        let key = kdf_next(self.chain_id(), seq, receipt.root, self.res());
 
-        // 3. Verify that this key_seq matches what the previous mark committed to
-        if !prev_commitment_matches(&self.last_mark, &key_seq)? {
+        // 3. Verify that this key matches what the previous mark committed to
+        if !prev_commitment_matches(&self.last_mark, &key)? {
             bail!(
-                "Chain integrity check failed: key_seq doesn't match previous mark's nextKey"
+                "Chain integrity check failed: key doesn't match previous mark's next_key"
             );
         }
 
@@ -302,23 +302,20 @@ impl FrostPmChain {
         let res = self.res();
         let (next_receipt, next_nonces) =
             self.precommit_next_mark(signers, seq + 1, &chain_id, res)?;
-        let next_key_seq = kdf_next(&chain_id, seq + 1, next_receipt.root, res);
+        let next_key = kdf_next(&chain_id, seq + 1, next_receipt.root, res);
 
-        // 8. Convert chrono::DateTime to dcbor::Date for ProvenanceMark
-        let pm_date = dcbor::Date::from_timestamp(date.timestamp() as f64);
-
-        // 9. Use key_seq and next_key_seq to create the mark
+        // 8. Use key and next_key to create the mark
         let mark = ProvenanceMark::new(
             res,
-            key_seq,
-            next_key_seq,
+            key,
+            next_key,
             chain_id,
             seq as u32,
-            pm_date,
+            date,
             info,
         )?;
 
-        // 10. Update state and store the new mark for future verification
+        // 9. Update state and store the new mark for future verification
         self.last_mark = mark.clone();
 
         Ok((mark, next_receipt, next_nonces))

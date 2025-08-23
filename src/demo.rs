@@ -20,7 +20,7 @@ pub fn run_demo() -> Result<()> {
     println!("   Threshold: 2 of 3 signers required");
     let config = FrostGroupConfig::new(
         2,
-        &["alice", "bob", "charlie"],
+        &["Alice", "Bob", "Charlie"],
         "Demo provenance mark chain".to_string(),
     )?;
     let group = FrostGroup::new_with_trusted_dealer(config, &mut OsRng)?;
@@ -52,9 +52,10 @@ pub fn run_demo() -> Result<()> {
 
         // Client generates genesis message and signs it
         let message_0 = FrostPmChain::genesis_message(group.config(), *res);
-        let (commitments_0, nonces_0) = group.round_1_commit(&["alice", "bob"], &mut OsRng)?;
+        let (commitments_0, nonces_0) =
+            group.round_1_commit(&["Alice", "Bob"], &mut OsRng)?;
         let signature_0 = group.round_2_sign(
-            &["alice", "bob"],
+            &["Alice", "Bob"],
             &commitments_0,
             &nonces_0,
             message_0.as_bytes(),
@@ -62,17 +63,18 @@ pub fn run_demo() -> Result<()> {
 
         // Client generates Round-1 commitments for seq=1
         let (commitments_1, nonces_1) =
-            group.round_1_commit(&["alice", "bob"], &mut OsRng)?;
+            group.round_1_commit(&["Alice", "Bob"], &mut OsRng)?;
 
         // Genesis
-        let (mut chain, mark_0, mut current_receipt, mut current_root) = FrostPmChain::new_chain(
-            group.clone(),
-            signature_0,
-            &commitments_1,
-            *res,
-            Date::now(),
-            Some(artwork_name),
-        )?;
+        let (mut chain, mark_0, mut current_receipt, mut current_root) =
+            FrostPmChain::new_chain(
+                group.clone(),
+                signature_0,
+                &commitments_1,
+                *res,
+                Date::now(),
+                Some(artwork_name),
+            )?;
 
         // The client keeps the seq1_nonces for the first append_mark
         let mut current_nonces = nonces_1;
@@ -101,7 +103,7 @@ pub fn run_demo() -> Result<()> {
                 Some(content.clone()),
             );
 
-            let signers = &["alice", "bob"];
+            let signers = &["Alice", "Bob"];
 
             let signature = chain.group().round_2_sign(
                 signers,
@@ -114,14 +116,15 @@ pub fn run_demo() -> Result<()> {
             let (next_commitments, new_nonces) =
                 chain.group().round_1_commit(signers, &mut OsRng)?;
 
-            let (mark, new_receipt, new_root, next_commitments) = chain.append_mark(
-                current_date,
-                Some(content),
-                &current_receipt,
-                Some(current_root),
-                signature,
-                next_commitments,
-            )?;
+            let (mark, new_receipt, new_root, next_commitments) = chain
+                .append_mark(
+                    current_date,
+                    Some(content),
+                    &current_receipt,
+                    Some(current_root),
+                    signature,
+                    next_commitments,
+                )?;
 
             // Update for next iteration
             current_nonces = new_nonces;

@@ -66,10 +66,11 @@ pub fn run_demo() -> Result<()> {
             group.round_1_commit(&["Alice", "Bob"], &mut OsRng)?;
 
         // Genesis
+        let date_0 = Date::now();
         let (mut chain, mark_0) =
             FrostPmChain::new_chain(
                 *res,
-                Date::now(),
+                date_0,
                 Some(artwork_name),
                 group.clone(),
                 signature_0,
@@ -94,11 +95,11 @@ pub fn run_demo() -> Result<()> {
         for seq in 1..MARK_COUNT {
             // Vary the content for each mark
             let info = format!("Edition #{} of collection #{}", seq, i + 1);
-            let current_date = Date::now();
+            let date = Date::now();
 
             // Client generates message and Round-2 signature
             let message = chain.message_next(
-                current_date.clone(),
+                &date,
                 Some(info.clone()),
             );
 
@@ -117,7 +118,7 @@ pub fn run_demo() -> Result<()> {
 
             let mark = chain
                 .append_mark(
-                    current_date,
+                    date,
                     Some(info),
                     &current_commitments,
                     signature,

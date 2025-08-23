@@ -74,7 +74,7 @@ impl FrostPmChain {
 
     pub fn message_next(
         &self,
-        date: Date,
+        date: &Date,
         info: Option<impl CBOREncodable>,
     ) -> Vec<u8> {
         let mut m = Vec::new();
@@ -177,7 +177,7 @@ impl FrostPmChain {
         }
 
         // 4. Build message for Round-2 signing (standard PM message format)
-        let message = Self::message_next(&self, date.clone(), info.clone());
+        let message = Self::message_next(&self, &date, info.clone());
 
         // 5. VERIFY the provided signature under the group verifying key
         self.group.verify(&message, &message_next_signature)?;

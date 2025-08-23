@@ -52,7 +52,7 @@ fn frost_controls_pm_chain() -> Result<()> {
 
     // Client generates message and Round-2 signature
     let message =
-        chain.message_next(date_1.clone(), Some(info_1));
+        chain.message_next(&date_1, Some(info_1));
     let signature_1 = chain.group().round_2_sign(
         signers,
         &commitments_1,
@@ -80,7 +80,7 @@ fn frost_controls_pm_chain() -> Result<()> {
 
     // Client generates message and Round-2 signature
     let message_2 =
-        chain.message_next(date_2.clone(), Some(info_2));
+        chain.message_next(&date_2, Some(info_2));
     let signature_2 = chain.group().round_2_sign(
         signers,
         &commitments_2,
@@ -175,7 +175,7 @@ fn frost_pm_chain_date_monotonicity() -> Result<()> {
 
     // Even though this will fail, we need to provide a signature
     let message_fail = chain.message_next(
-        earlier_date.clone(),
+        &earlier_date,
         Some("test content 2"),
     );
     let signature_fail = chain.group().round_2_sign(
@@ -249,7 +249,7 @@ fn frost_pm_different_signer_combinations() -> Result<()> {
     // Next mark with same participants as genesis precommit
     let date_1 = Date::now();
     let message_1 = chain.message_next(
-        date_1.clone(),
+        &date_1,
         Some("test content 2"),
     );
     let signature_1 = chain.group().round_2_sign(
@@ -326,10 +326,11 @@ fn frost_pm_all_resolutions() -> Result<()> {
 
         // Genesis
         let date_0 = Date::now();
+        let info_0 = Some("test content 0");
         let (mut chain, mark_0) = FrostPmChain::new_chain(
             res,
             date_0,
-            Some("test content 1"),
+            info_0,
             group.clone(),
             signature_0,
             &commitments_1,
@@ -349,9 +350,10 @@ fn frost_pm_all_resolutions() -> Result<()> {
 
         // Mark 1
         let date_1 = Date::now();
+        let info_1 = Some("test content 1");
         let message_1 = chain.message_next(
-            date_1.clone(),
-            Some("test content 2"),
+            &date_1,
+            info_1,
         );
         let signature_1 = chain.group().round_2_sign(
             signers,
@@ -366,7 +368,7 @@ fn frost_pm_all_resolutions() -> Result<()> {
 
         let mark_1 = chain.append_mark(
             date_1,
-            Some("test content 2"),
+            info_1,
             &commitments_1,
             signature_1,
             &commitments_2,
@@ -385,9 +387,10 @@ fn frost_pm_all_resolutions() -> Result<()> {
 
         // Mark 2
         let date_2 = Date::now();
+        let info_2 = Some("test content 3");
         let message_2 = chain.message_next(
-            date_2.clone(),
-            Some("test content 3"),
+            &date_2,
+            info_2,
         );
         let signature_2 = chain.group().round_2_sign(
             signers,
@@ -402,7 +405,7 @@ fn frost_pm_all_resolutions() -> Result<()> {
 
         let mark_2 = chain.append_mark(
             date_2,
-            Some("test content 3"),
+            info_2,
             &commitments_2,
             signature_2,
             &commitments_3,

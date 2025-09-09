@@ -127,9 +127,9 @@ impl FrostPmChain {
         let m0 = genesis_msg.as_bytes();
 
         // Verify the provided signature against the genesis message
-        group.verify(&m0, &message_0_signature)?;
+        group.verify(m0, &message_0_signature)?;
 
-        let key_0 = hkdf_hmac_sha256(&message_0_signature.serialize()?, &m0, link_len);
+        let key_0 = hkdf_hmac_sha256(&message_0_signature.serialize()?, m0, link_len);
 
         // id == key_0 (genesis invariant)
         let id = key_0.clone();
@@ -138,7 +138,7 @@ impl FrostPmChain {
         // The client has already performed Round-1 commit for the next sequence
 
         // Compute Root_1 = commitments_root(&commitments_map)
-        let root_1 = Self::commitments_root(&commitments_1);
+        let root_1 = Self::commitments_root(commitments_1);
 
         // Compute next_key_0 = derive_link_from_root(res, id, 1, Root_1)
         let next_key_0 = Self::kdf_next(&id, 1, root_1, res);
@@ -191,7 +191,7 @@ impl FrostPmChain {
         }
 
         // 4. Build message for Round-2 signing (standard PM message format)
-        let message = Self::message_next(&self, &date, info.clone());
+        let message = Self::message_next(self, &date, info.clone());
 
         // 5. VERIFY the provided signature under the group verifying key
         self.group.verify(message.as_bytes(), &message_next_signature)?;

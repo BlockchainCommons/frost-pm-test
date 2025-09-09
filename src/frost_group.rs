@@ -59,7 +59,7 @@ impl FrostGroup {
         public_key_package: PublicKeyPackage,
     ) -> Result<Self> {
         // Validate that we have key packages for all participants
-        if key_packages.len() != config.max_signers() as usize {
+        if key_packages.len() != config.max_signers() {
             bail!(
                 "Expected {} key packages, got {}",
                 config.max_signers(),

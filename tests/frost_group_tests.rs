@@ -54,7 +54,7 @@ fn test_group_signing() -> Result<()> {
     let participant_names = group.participant_names();
     let signers: Vec<&str> = participant_names
         .iter()
-        .take(group.min_signers() as usize)
+        .take(group.min_signers())
         .map(|s| s.as_str())
         .collect();
     assert_eq!(signers.len(), 2); // min_signers
@@ -172,7 +172,7 @@ fn test_group_basic_functionality() -> Result<()> {
     let participant_names = group.participant_names();
     let signers: Vec<&str> = participant_names
         .iter()
-        .take(group.min_signers() as usize)
+        .take(group.min_signers())
         .map(|s| s.as_str())
         .collect();
 

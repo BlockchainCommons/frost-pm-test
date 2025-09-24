@@ -110,7 +110,8 @@ fn test_genesis_message_integration_with_pm_chain() -> Result<()> {
     let res = ProvenanceMarkResolution::Medium;
     let date_0 = Date::from_ymd(2025, 1, 1);
     let info_0 = None::<String>;
-    let message_0 = FrostPmChain::message_0(&config, res, &date_0, info_0.clone());
+    let message_0 =
+        FrostPmChain::message_0(&config, res, &date_0, info_0.clone());
 
     let group = FrostGroup::new_with_trusted_dealer(config, &mut OsRng)?;
 

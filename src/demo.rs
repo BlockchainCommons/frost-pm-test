@@ -50,7 +50,12 @@ pub fn run_demo() -> Result<()> {
         // Client generates genesis message and signs it
         let date_0 = Date::now();
         let info_0 = Some(artwork_name);
-        let message_0 = FrostPmChain::message_0(group.config(), *res, &date_0, info_0.clone());
+        let message_0 = FrostPmChain::message_0(
+            group.config(),
+            *res,
+            &date_0,
+            info_0.clone(),
+        );
         let (commitments_0, nonces_0) =
             group.round_1_commit(&["Alice", "Bob"], &mut OsRng)?;
         let signature_0 = group.round_2_sign(
@@ -65,15 +70,14 @@ pub fn run_demo() -> Result<()> {
             group.round_1_commit(&["Alice", "Bob"], &mut OsRng)?;
 
         // Genesis
-        let (mut chain, mark_0) =
-            FrostPmChain::new_chain(
-                *res,
-                &date_0,
-                info_0,
-                group.clone(),
-                signature_0,
-                &commitments_1,
-            )?;
+        let (mut chain, mark_0) = FrostPmChain::new_chain(
+            *res,
+            &date_0,
+            info_0,
+            group.clone(),
+            signature_0,
+            &commitments_1,
+        )?;
 
         // The client keeps the seq1_nonces for the first append_mark
         let mut current_nonces = nonces_1;
@@ -92,14 +96,12 @@ pub fn run_demo() -> Result<()> {
         print!("   Creating marks: ");
         for seq in 1..MARK_COUNT {
             // Vary the content for each mark
-            let info = Some(format!("Edition #{} of collection #{}", seq, i + 1));
+            let info =
+                Some(format!("Edition #{} of collection #{}", seq, i + 1));
             let date = Date::now();
 
             // Client generates message and Round-2 signature
-            let message = chain.message_next(
-                &date,
-                info.clone(),
-            );
+            let message = chain.message_next(&date, info.clone());
 
             let signers = &["Alice", "Bob"];
 
@@ -114,14 +116,13 @@ pub fn run_demo() -> Result<()> {
             let (next_commitments, new_nonces) =
                 chain.group().round_1_commit(signers, &mut OsRng)?;
 
-            let mark = chain
-                .append_mark(
-                    date,
-                    info,
-                    &current_commitments,
-                    signature,
-                    &next_commitments,
-                )?;
+            let mark = chain.append_mark(
+                date,
+                info,
+                &current_commitments,
+                signature,
+                &next_commitments,
+            )?;
 
             // Update for next iteration
             current_nonces = new_nonces;
@@ -173,7 +174,8 @@ pub fn run_demo() -> Result<()> {
         // Spot check precedence for performance (checking all 99 links would be
         // slow)
         let mut spot_checks_passed = 0;
-        let check_indices: Vec<usize> = (0..MARK_COUNT - 1).step_by((MARK_COUNT - 1) / 7).collect();
+        let check_indices: Vec<usize> =
+            (0..MARK_COUNT - 1).step_by((MARK_COUNT - 1) / 7).collect();
         for &i in &check_indices {
             if all_marks[i].precedes(&all_marks[i + 1]) {
                 spot_checks_passed += 1;

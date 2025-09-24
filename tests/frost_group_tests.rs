@@ -8,7 +8,8 @@ pub fn corporate_board_config() -> FrostGroupConfig {
         3,
         &["CEO", "CFO", "CTO", "COO", "CLO"],
         "Corporate board governance for strategic decisions".to_string(),
-    ).unwrap()
+    )
+    .unwrap()
 }
 
 pub fn family_config() -> FrostGroupConfig {
@@ -16,7 +17,8 @@ pub fn family_config() -> FrostGroupConfig {
         2,
         &["Alice", "Bob", "Charlie", "Diana"],
         "Family trust fund management".to_string(),
-    ).unwrap()
+    )
+    .unwrap()
 }
 
 #[test]

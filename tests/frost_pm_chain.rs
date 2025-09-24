@@ -15,7 +15,8 @@ fn frost_controls_pm_chain() -> Result<()> {
     let res = ProvenanceMarkResolution::Quartile;
     let date_0 = Date::now();
     let info_0 = None::<String>;
-    let message_0 = FrostPmChain::message_0(&config, res, &date_0, info_0.clone());
+    let message_0 =
+        FrostPmChain::message_0(&config, res, &date_0, info_0.clone());
     let group = FrostGroup::new_with_trusted_dealer(config, &mut OsRng)?;
 
     // Client generates genesis message and signs it
@@ -51,8 +52,7 @@ fn frost_controls_pm_chain() -> Result<()> {
     let date_1 = Date::now();
 
     // Client generates message and Round-2 signature
-    let message_1 =
-        chain.message_next(&date_1, info_1);
+    let message_1 = chain.message_next(&date_1, info_1);
     let signature_1 = chain.group().round_2_sign(
         signers,
         &commitments_1,
@@ -79,8 +79,7 @@ fn frost_controls_pm_chain() -> Result<()> {
     let date_2 = Date::now();
 
     // Client generates message and Round-2 signature
-    let message_2 =
-        chain.message_next(&date_2, info_2);
+    let message_2 = chain.message_next(&date_2, info_2);
     let signature_2 = chain.group().round_2_sign(
         signers,
         &commitments_2,
@@ -175,10 +174,8 @@ fn frost_pm_chain_date_monotonicity() -> Result<()> {
         Date::from_datetime(date_0.datetime() - chrono::Duration::seconds(60));
 
     // Even though this will fail, we need to provide a signature
-    let message_fail = chain.message_next(
-        &earlier_date,
-        Some("test content 2"),
-    );
+    let message_fail =
+        chain.message_next(&earlier_date, Some("test content 2"));
     let signature_fail = chain.group().round_2_sign(
         signers,
         &commitments_1,
@@ -251,10 +248,7 @@ fn frost_pm_different_signer_combinations() -> Result<()> {
     // Next mark with same participants as genesis precommit
     let date_1 = Date::now();
     let info_1 = Some("test content 2");
-    let message_1 = chain.message_next(
-        &date_1,
-        info_1,
-    );
+    let message_1 = chain.message_next(&date_1, info_1);
     let signature_1 = chain.group().round_2_sign(
         signers,
         &commitments_1,
@@ -306,7 +300,8 @@ fn frost_pm_all_resolutions() -> Result<()> {
     for res in resolutions {
         println!(
             "Testing {} resolution ({}-byte links)",
-            res, res.link_length()
+            res,
+            res.link_length()
         );
 
         // Test data for this resolution
@@ -314,7 +309,8 @@ fn frost_pm_all_resolutions() -> Result<()> {
         // Client generates genesis message and signs it
         let date_0 = Date::now();
         let info_0 = Some("test content 0");
-        let message_0 = FrostPmChain::message_0(group.config(), res, &date_0, info_0);
+        let message_0 =
+            FrostPmChain::message_0(group.config(), res, &date_0, info_0);
         let signers = &["Alice", "Bob"];
         let (commitments_0, nonces_0) =
             group.round_1_commit(signers, &mut OsRng)?;
@@ -354,10 +350,7 @@ fn frost_pm_all_resolutions() -> Result<()> {
         // Mark 1
         let date_1 = Date::now();
         let info_1 = Some("test content 1");
-        let message_1 = chain.message_next(
-            &date_1,
-            info_1,
-        );
+        let message_1 = chain.message_next(&date_1, info_1);
         let signature_1 = chain.group().round_2_sign(
             signers,
             &commitments_1,
@@ -391,10 +384,7 @@ fn frost_pm_all_resolutions() -> Result<()> {
         // Mark 2
         let date_2 = Date::now();
         let info_2 = Some("test content 3");
-        let message_2 = chain.message_next(
-            &date_2,
-            info_2,
-        );
+        let message_2 = chain.message_next(&date_2, info_2);
         let signature_2 = chain.group().round_2_sign(
             signers,
             &commitments_2,

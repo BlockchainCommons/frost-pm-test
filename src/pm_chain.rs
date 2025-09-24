@@ -36,24 +36,16 @@ pub struct FrostPmChain {
 
 impl FrostPmChain {
     /// Get the resolution from the last mark
-    fn res(&self) -> ProvenanceMarkResolution {
-        self.last_mark.res()
-    }
+    fn res(&self) -> ProvenanceMarkResolution { self.last_mark.res() }
 
     /// Get the chain ID from the last mark
-    fn chain_id(&self) -> &[u8] {
-        self.last_mark.chain_id()
-    }
+    fn chain_id(&self) -> &[u8] { self.last_mark.chain_id() }
 
     /// Get the next sequence number for the chain
-    fn next_seq(&self) -> u32 {
-        self.last_mark.seq() + 1
-    }
+    fn next_seq(&self) -> u32 { self.last_mark.seq() + 1 }
 
     /// Get a reference to the underlying FROST group
-    pub fn group(&self) -> &FrostGroup {
-        &self.group
-    }
+    pub fn group(&self) -> &FrostGroup { &self.group }
 
     /// Create a genesis message for a group
     pub fn message_0(
@@ -123,13 +115,15 @@ impl FrostPmChain {
         //    signature
         // Build M0 from group configuration including charter and participant
         // names
-        let genesis_msg = Self::message_0(group.config(), res, date, info.clone());
+        let genesis_msg =
+            Self::message_0(group.config(), res, date, info.clone());
         let m0 = genesis_msg.as_bytes();
 
         // Verify the provided signature against the genesis message
         group.verify(m0, &message_0_signature)?;
 
-        let key_0 = hkdf_hmac_sha256(&message_0_signature.serialize()?, m0, link_len);
+        let key_0 =
+            hkdf_hmac_sha256(&message_0_signature.serialize()?, m0, link_len);
 
         // id == key_0 (genesis invariant)
         let id = key_0.clone();
@@ -194,7 +188,8 @@ impl FrostPmChain {
         let message = Self::message_next(self, &date, info.clone());
 
         // 5. VERIFY the provided signature under the group verifying key
-        self.group.verify(message.as_bytes(), &message_next_signature)?;
+        self.group
+            .verify(message.as_bytes(), &message_next_signature)?;
 
         // 6. BEFORE finalizing this mark's hash, use provided commitments for
         //    seq+1

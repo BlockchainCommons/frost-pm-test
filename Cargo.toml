@@ -4,13 +4,13 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-provenance-mark = "^0.12.0"
-bc-crypto = "^0.9.0"
+provenance-mark = "^0.16.0"
+bc-crypto = "^0.13.0"
 
 frost-ed25519 = "2.1.0"
 hex = { version = "^0.4.3", default-features = true }
 rand = "^0.8.5"
 chrono = "0.4"
 anyhow = "1"
-dcbor = "0.22"
+dcbor = "0.23.3"
 bincode = "1.3"

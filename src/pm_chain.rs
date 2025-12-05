@@ -21,7 +21,7 @@ pub fn prev_commitment_matches(
         candidate_next_key.to_vec(),
         prev.chain_id().to_vec(),
         prev.seq(),
-        prev.date().clone(),
+        prev.date(),
         prev.info(), /* info is application-defined; we pass it through
                       * unchanged */
     )?;
@@ -51,7 +51,7 @@ impl FrostPmChain {
     pub fn message_0(
         config: &FrostGroupConfig,
         res: ProvenanceMarkResolution,
-        date: &Date,
+        date: Date,
         info: Option<impl CBOREncodable>,
     ) -> String {
         let participant_names: Vec<String> =
@@ -76,7 +76,7 @@ impl FrostPmChain {
 
     pub fn message_next(
         &self,
-        date: &Date,
+        date: Date,
         info: Option<impl CBOREncodable>,
     ) -> String {
         let info_data = if let Some(ref info_val) = info {
@@ -103,7 +103,7 @@ impl FrostPmChain {
     // precommit data for seq=1
     pub fn new_chain(
         res: ProvenanceMarkResolution,
-        date: &Date,
+        date: Date,
         info: Option<impl CBOREncodable>,
         group: FrostGroup,
         message_0_signature: frost_ed25519::Signature,
@@ -144,7 +144,7 @@ impl FrostPmChain {
             next_key_0,
             id.clone(),
             0,
-            date.clone(),
+            date,
             info,
         )?;
 
@@ -167,7 +167,7 @@ impl FrostPmChain {
         next_commitments: &BTreeMap<Identifier, SigningCommitments>,
     ) -> Result<ProvenanceMark> {
         // Check date monotonicity against the last mark's date
-        if date < *self.last_mark.date() {
+        if date < self.last_mark.date() {
             bail!("date monotonicity violated");
         }
 
@@ -185,7 +185,7 @@ impl FrostPmChain {
         }
 
         // 4. Build message for Round-2 signing (standard PM message format)
-        let message = Self::message_next(self, &date, info.clone());
+        let message = Self::message_next(self, date, info.clone());
 
         // 5. VERIFY the provided signature under the group verifying key
         self.group

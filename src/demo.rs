@@ -53,7 +53,7 @@ pub fn run_demo() -> Result<()> {
         let message_0 = FrostPmChain::message_0(
             group.config(),
             *res,
-            &date_0,
+            date_0,
             info_0.clone(),
         );
         let (commitments_0, nonces_0) =
@@ -72,7 +72,7 @@ pub fn run_demo() -> Result<()> {
         // Genesis
         let (mut chain, mark_0) = FrostPmChain::new_chain(
             *res,
-            &date_0,
+            date_0,
             info_0,
             group.clone(),
             signature_0,
@@ -101,7 +101,7 @@ pub fn run_demo() -> Result<()> {
             let date = Date::now();
 
             // Client generates message and Round-2 signature
-            let message = chain.message_next(&date, info.clone());
+            let message = chain.message_next(date, info.clone());
 
             let signers = &["Alice", "Bob"];
 

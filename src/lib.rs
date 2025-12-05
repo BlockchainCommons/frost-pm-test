@@ -16,6 +16,9 @@ pub mod frost_group;
 pub mod frost_group_config;
 pub mod pm_chain;
 
+/// Re-export rand_core from frost_ed25519 for callers needing compatible
+/// RNG types
+pub use frost_ed25519::rand_core;
 pub use frost_group::FrostGroup;
 pub use frost_group_config::FrostGroupConfig;
 pub use pm_chain::FrostPmChain;

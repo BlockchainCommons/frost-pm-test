@@ -1,8 +1,9 @@
 use anyhow::{Result, bail};
 use dcbor::Date;
-use frost_pm_test::{FrostGroup, FrostGroupConfig, pm_chain::FrostPmChain};
+use frost_pm_test::{
+    FrostGroup, FrostGroupConfig, pm_chain::FrostPmChain, rand_core::OsRng,
+};
 use provenance_mark::ProvenanceMarkResolution;
-use rand::rngs::OsRng;
 
 const MARK_COUNT: usize = 100;
 

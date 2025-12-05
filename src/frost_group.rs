@@ -5,10 +5,10 @@ use frost_ed25519 as frost;
 use frost_ed25519::{
     Identifier, Signature, SigningPackage,
     keys::{KeyPackage, PublicKeyPackage},
+    rand_core::{CryptoRng, RngCore},
     round1::{SigningCommitments, SigningNonces},
     round2::SignatureShare,
 };
-use rand::{CryptoRng, RngCore};
 
 use crate::frost_group_config::FrostGroupConfig;
 

@@ -223,9 +223,11 @@ impl FrostPmChain {
             // Get canonical bytes for identifier and commitments using
             // serde+bincode
             let id_bytes =
-                bincode::serialize(id).expect("serialize identifier");
+                bincode::serde::encode_to_vec(id, bincode::config::standard())
+                    .expect("serialize identifier");
             let sc_bytes =
-                bincode::serialize(sc).expect("serialize signing commitments");
+                bincode::serde::encode_to_vec(sc, bincode::config::standard())
+                    .expect("serialize signing commitments");
 
             // Add length prefixes for deterministic parsing
             buf.extend_from_slice(&(id_bytes.len() as u16).to_be_bytes());

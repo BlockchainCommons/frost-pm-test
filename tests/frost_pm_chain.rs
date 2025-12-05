@@ -1,8 +1,9 @@
 use anyhow::Result;
 use dcbor::Date;
-use frost_pm_test::{FrostGroup, FrostGroupConfig, pm_chain::FrostPmChain};
+use frost_pm_test::{
+    FrostGroup, FrostGroupConfig, pm_chain::FrostPmChain, rand_core::OsRng,
+};
 use provenance_mark::ProvenanceMarkResolution;
-use rand::rngs::OsRng;
 
 #[test]
 fn frost_controls_pm_chain() -> Result<()> {

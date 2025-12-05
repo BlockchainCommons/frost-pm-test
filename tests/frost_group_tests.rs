@@ -1,6 +1,5 @@
 use anyhow::Result;
-use frost_pm_test::{FrostGroup, FrostGroupConfig};
-use rand::rngs::OsRng;
+use frost_pm_test::{FrostGroup, FrostGroupConfig, rand_core::OsRng};
 
 // Test helper functions
 pub fn corporate_board_config() -> FrostGroupConfig {

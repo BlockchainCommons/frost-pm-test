@@ -1,7 +1,6 @@
 use anyhow::Result;
 use frost_ed25519::{self as frost};
-use frost_pm_test::FrostGroupConfig;
-use rand::rngs::OsRng;
+use frost_pm_test::{FrostGroupConfig, rand_core::OsRng};
 
 // Test helper functions
 fn corporate_board_config() -> Result<FrostGroupConfig> {
